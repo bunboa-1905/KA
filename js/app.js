@@ -537,6 +537,10 @@ class RemotePlayer {
 
         this.mesh = new THREE.Group();
         this.buildMesh();
+        this.playerBody = new THREE.Group();
+        this.mesh.add(this.playerBody);
+
+        this.buildMesh();
 
         this.nameTag = createNameTagSprite(this.name, '#34d399');
         this.nameTag.position.set(0, 2.6, 0);
@@ -555,27 +559,130 @@ class RemotePlayer {
     }
 
     buildMesh() {
-        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, flatShading: true });
-        const shirtMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, flatShading: true });
-        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, flatShading: true });
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe4e1, flatShading: true });
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0xff80ab, flatShading: true });
+        const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xff1744, flatShading: true });
+        const eyesMat = new THREE.MeshBasicMaterial({ color: 0x2979ff });
+        const eyeHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const blushMat = new THREE.MeshBasicMaterial({ color: 0xff80ab, transparent: true, opacity: 0.7 });
+        const overallsMat = new THREE.MeshStandardMaterial({ color: 0x42a5f5, flatShading: true });
+        const sockMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
+        const shoeMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true });
+
+        // Head
+        this.headMesh = new THREE.Group();
+        this.headMesh.position.set(0, 1.75, 0);
 
         const headCube = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.65, 0.65), skinMat);
-        headCube.position.y = 1.75;
         headCube.castShadow = true;
-        this.mesh.add(headCube);
+        this.headMesh.add(headCube);
 
-        const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.38), shirtMat);
-        torsoMesh.position.y = 1.0;
+        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.28, 0.72), hairMat);
+        hairTop.position.set(0, 0.24, 0);
+        this.headMesh.add(hairTop);
+
+        const frontBangs = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.2, 0.15), hairMat);
+        frontBangs.position.set(0, 0.15, 0.32);
+        this.headMesh.add(frontBangs);
+
+        // Twin Tails
+        this.leftPonytail = new THREE.Group();
+        this.leftPonytail.position.set(-0.4, 0.1, -0.1);
+        const leftTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
+        leftTailMesh.position.set(-0.05, -0.22, 0);
+        leftTailMesh.castShadow = true;
+        this.leftPonytail.add(leftTailMesh);
+        this.leftPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
+        this.headMesh.add(this.leftPonytail);
+
+        this.rightPonytail = new THREE.Group();
+        this.rightPonytail.position.set(0.4, 0.1, -0.1);
+        const rightTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
+        rightTailMesh.position.set(-0.05, -0.22, 0);
+        rightTailMesh.castShadow = true;
+        this.rightPonytail.add(rightTailMesh);
+        this.rightPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
+        this.headMesh.add(this.rightPonytail);
+
+        // Eyes & Blush
+        const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
+        leftEye.position.set(-0.16, 0.02, 0.33);
+        const leftSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
+        leftSparkle.position.set(-0.14, 0.05, 0.34);
+
+        const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
+        rightEye.position.set(0.16, 0.02, 0.33);
+        const rightSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
+        rightSparkle.position.set(0.18, 0.05, 0.34);
+
+        this.headMesh.add(leftEye); this.headMesh.add(leftSparkle);
+        this.headMesh.add(rightEye); this.headMesh.add(rightSparkle);
+
+        const leftBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
+        leftBlush.position.set(-0.2, -0.08, 0.33);
+        const rightBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
+        rightBlush.position.set(0.2, -0.08, 0.33);
+        this.headMesh.add(leftBlush); this.headMesh.add(rightBlush);
+
+        this.playerBody.add(this.headMesh);
+
+        // Torso & Backpack
+        const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.75, 0.36), overallsMat);
+        torsoMesh.position.set(0, 1.0, 0);
         torsoMesh.castShadow = true;
-        this.mesh.add(torsoMesh);
+        this.playerBody.add(torsoMesh);
 
-        const legGeo = new THREE.BoxGeometry(0.24, 0.6, 0.24);
-        const leftLeg = new THREE.Mesh(legGeo, pantsMat);
-        leftLeg.position.set(-0.18, 0.3, 0);
-        const rightLeg = new THREE.Mesh(legGeo, pantsMat);
-        rightLeg.position.set(0.18, 0.3, 0);
-        this.mesh.add(leftLeg);
-        this.mesh.add(rightLeg);
+        const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0xffeb3b, flatShading: true }));
+        backpack.position.set(0, 1.0, -0.26);
+        backpack.castShadow = true;
+        this.playerBody.add(backpack);
+
+        // Arms & Axe
+        this.leftArm = new THREE.Group();
+        this.leftArm.position.set(-0.42, 1.3, 0);
+        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
+        leftArmMesh.position.set(0, -0.3, 0);
+        this.leftArm.add(leftArmMesh);
+        this.playerBody.add(this.leftArm);
+
+        this.rightArm = new THREE.Group();
+        this.rightArm.position.set(0.42, 1.3, 0);
+        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
+        rightArmMesh.position.set(0, -0.3, 0);
+        this.rightArm.add(rightArmMesh);
+
+        const axeGroup = new THREE.Group();
+        axeGroup.position.set(0, -0.65, 0.15);
+        axeGroup.rotation.x = Math.PI / 4;
+        axeGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.07), new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true })));
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.36), new THREE.MeshStandardMaterial({ color: 0xff4081, flatShading: true }));
+        blade.position.set(0, 0.3, 0.12);
+        axeGroup.add(blade);
+        this.rightArm.add(axeGroup);
+        this.playerBody.add(this.rightArm);
+
+        // Legs
+        this.leftLeg = new THREE.Group();
+        this.leftLeg.position.set(-0.16, 0.55, 0);
+        this.leftLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
+        const leftSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
+        leftSock.position.set(0, -0.32, 0);
+        this.leftLeg.add(leftSock);
+        const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
+        leftBoot.position.set(0, -0.48, 0.03);
+        this.leftLeg.add(leftBoot);
+        this.playerBody.add(this.leftLeg);
+
+        this.rightLeg = new THREE.Group();
+        this.rightLeg.position.set(0.16, 0.55, 0);
+        this.rightLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
+        const rightSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
+        rightSock.position.set(0, -0.32, 0);
+        this.rightLeg.add(rightSock);
+        const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
+        rightBoot.position.set(0, -0.48, 0.03);
+        this.rightLeg.add(rightBoot);
+        this.playerBody.add(this.rightLeg);
     }
 
     updateNetworkState(data) {
@@ -591,6 +698,28 @@ class RemotePlayer {
     }
 
     update(deltaTime) {
+        // Animation
+        const distanceToTarget = this.position.distanceTo(this.targetPosition);
+        if (distanceToTarget > 0.05) {
+            const time = Date.now() * 0.012; // Fast run anim
+            if (this.leftLeg) this.leftLeg.rotation.x = Math.sin(time) * 0.6;
+            if (this.rightLeg) this.rightLeg.rotation.x = -Math.sin(time) * 0.6;
+            if (this.leftArm) this.leftArm.rotation.x = -Math.sin(time) * 0.6;
+            if (this.rightArm) this.rightArm.rotation.x = Math.sin(time) * 0.6;
+            if (this.headMesh) this.headMesh.rotation.y = Math.sin(time * 0.5) * 0.1;
+            
+            // Bouncing
+            this.playerBody.position.y = Math.abs(Math.sin(time * 2)) * 0.15;
+        } else {
+            // Idle
+            if (this.leftLeg) this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, deltaTime * 10);
+            if (this.rightLeg) this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, deltaTime * 10);
+            if (this.leftArm) this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, deltaTime * 10);
+            if (this.rightArm) this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, deltaTime * 10);
+            if (this.headMesh) this.headMesh.rotation.y = THREE.MathUtils.lerp(this.headMesh.rotation.y, 0, deltaTime * 10);
+            this.playerBody.position.y = THREE.MathUtils.lerp(this.playerBody.position.y, 0, deltaTime * 10);
+        }
+
         this.position.lerp(this.targetPosition, deltaTime * 12);
         this.rotation = THREE.MathUtils.lerp(this.rotation, this.targetRotation, deltaTime * 12);
         this.mesh.position.copy(this.position);
@@ -662,17 +791,24 @@ class Environment {
             return treeGroup;
         };
 
+        // Hàm tạo số ngẫu nhiên cố định (Seeded Random) để đảm bảo 2 máy mọc cây ở vị trí Y HỆT NHAU
+        let seed = 12345;
+        const seededRandom = () => {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        };
+
         for (let i = 0; i < KASurvival.WORLD_CONFIG.treeCount; i++) {
-            let x = (Math.random() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
-            let z = (Math.random() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
+            let x = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
+            let z = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
             if (Math.hypot(x, z) < KASurvival.WORLD_CONFIG.safeZoneRadius) continue;
-            this.propsGroup.add(createTree(x, z, 0.8 + Math.random() * 0.6));
+            this.propsGroup.add(createTree(x, z, 0.8 + seededRandom() * 0.6));
         }
 
         const flowerColors = [0xff4081, 0xffeb3b, 0xab47bc, 0x00e676, 0xff9100];
         for (let i = 0; i < KASurvival.WORLD_CONFIG.flowerCount; i++) {
-            let x = (Math.random() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
-            let z = (Math.random() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
+            let x = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
+            let z = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
             const fGroup = new THREE.Group();
             fGroup.position.set(x, 0, z);
             const stem = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), new THREE.MeshBasicMaterial({ color: 0x4caf50 }));
