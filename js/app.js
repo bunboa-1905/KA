@@ -536,7 +536,6 @@ class RemotePlayer {
         this.targetRotation = 0;
 
         this.mesh = new THREE.Group();
-        this.buildMesh();
         this.playerBody = new THREE.Group();
         this.mesh.add(this.playerBody);
 
