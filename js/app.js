@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Features: 2-Way Handshake ACK, Room Code Join Input, Google STUN ICE Servers, PeerJS Cloud
+ * Features: Public WebSocket Realtime Relay Engine (EMQX / MQTT wss://), Login System, 2-Player Co-op
  * Engine: Three.js
  */
 
@@ -243,9 +243,8 @@ KASurvival.WORLD_CONFIG = {
 
 class PlayerData {
     constructor() {
-        this.playerUniqueId = null;
+        this.playerUniqueId = this.loadOrGenerateUniqueId();
         this.playerName = localStorage.getItem('ka_player_name') || '';
-        this.friendLastKnownId = localStorage.getItem('ka_friend_id') || null;
 
         this.stats = { health: 100, maxHealth: 100, hunger: 100, maxHunger: 100 };
         this.inventory = [
@@ -257,14 +256,18 @@ class PlayerData {
         this.equippedSlotIndex = 0;
     }
 
+    loadOrGenerateUniqueId() {
+        let savedId = localStorage.getItem('ka_player_id');
+        if (!savedId) {
+            savedId = 'ka-' + Math.random().toString(36).substr(2, 6);
+            localStorage.setItem('ka_player_id', savedId);
+        }
+        return savedId;
+    }
+
     setPlayerName(name) {
         this.playerName = name || 'Player';
         localStorage.setItem('ka_player_name', this.playerName);
-    }
-
-    setFriendId(friendId) {
-        this.friendLastKnownId = friendId;
-        localStorage.setItem('ka_friend_id', friendId);
     }
 }
 KASurvival.PlayerData = PlayerData;
@@ -711,179 +714,107 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (2-Way Handshake ACK + Join Code)
+// 11. NETWORK MANAGER (Public WebSocket Realtime Relay Engine)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
         this.playerData = playerData;
-        this.peer = null;
-        this.connection = null;
-        this.isHost = false;
+        this.client = null;
+        this.roomName = 'KA-WORLD';
+        this.topic = 'ka_survival_v1/world';
         this.isConnected = false;
-        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v5';
-        this.heartbeatTimer = null;
 
-        this.initPeer();
+        this.initRoomFromHash();
+        this.connectWebSocket();
     }
 
-    initPeer() {
-        if (typeof Peer === 'undefined') return;
-
-        this.peer = new Peer({
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
-                ]
+    initRoomFromHash() {
+        const hash = window.location.hash;
+        if (hash.includes('#room=')) {
+            const customRoom = hash.split('#room=')[1].trim();
+            if (customRoom) {
+                this.roomName = customRoom.toUpperCase();
+                this.topic = `ka_survival_v1/${this.roomName.toLowerCase()}`;
             }
+        }
+        window.history.replaceState(null, null, `#room=${this.roomName}`);
+        KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
+    }
+
+    setRoomName(newRoomName) {
+        if (!newRoomName) return;
+        this.roomName = newRoomName.trim().toUpperCase();
+        this.topic = `ka_survival_v1/${this.roomName.toLowerCase()}`;
+        window.history.replaceState(null, null, `#room=${this.roomName}`);
+        KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
+
+        if (this.client && this.isConnected) {
+            this.client.subscribe(this.topic);
+        }
+    }
+
+    connectWebSocket() {
+        if (typeof mqtt === 'undefined') return;
+
+        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'Connecting WebSocket Engine...', status: 'connecting' });
+
+        // Enterprise-grade Public SSL WebSocket Broker (wss:// via Port 8084 / 443)
+        const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+        const clientId = 'ka_player_' + Math.random().toString(36).substr(2, 8);
+
+        this.client = mqtt.connect(brokerUrl, {
+            clientId: clientId,
+            clean: true,
+            connectTimeout: 4000,
+            reconnectPeriod: 2000
         });
 
-        this.peer.on('open', (id) => {
-            this.playerData.playerUniqueId = id;
-            KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', id);
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Searching for Friend...`, status: 'waiting' });
-            this.registerAndAutoPair();
-        });
-
-        this.peer.on('connection', (conn) => {
-            this.connection = conn;
-            this.isHost = true;
+        this.client.on('connect', () => {
+            this.isConnected = true;
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `🟢 Online (Room: ${this.roomName})`, status: 'connected' });
             
-            this.connection.on('open', () => {
-                this.isConnected = true;
-                this.setupConnectionListeners();
-                this.connection.send({ type: 'HANDSHAKE_ACK', name: this.playerData.playerName });
-                KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: true });
+            this.client.subscribe(this.topic, (err) => {
+                if (!err) {
+                    this.broadcastPlayerState(
+                        { x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName
+                    );
+                }
             });
         });
 
-        this.peer.on('error', () => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retrying network...`, status: 'error' });
-            setTimeout(() => this.registerAndAutoPair(), 2000);
-        });
-    }
-
-    registerAndAutoPair() {
-        if (!this.playerData.playerUniqueId) return;
-
-        const hash = window.location.hash;
-        if (hash.includes('#room=')) {
-            const targetPeerId = hash.split('#room=')[1];
-            if (targetPeerId && targetPeerId !== this.playerData.playerUniqueId) {
-                this.connectToPeer(targetPeerId);
-                return;
-            }
-        }
-
-        window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
-        this.fetchActiveHostAndConnect();
-        this.startHeartbeatSignal();
-        this.listenForPeerSignal();
-    }
-
-    fetchActiveHostAndConnect() {
-        fetch(`${this.signalTopicUrl}/json?poll=1`)
-            .then(res => res.text())
-            .then(text => {
-                if (this.isConnected) return;
-                const lines = text.trim().split('\n');
-                for (let i = lines.length - 1; i >= 0; i--) {
-                    try {
-                        const data = JSON.parse(lines[i]);
-                        const activeId = data.message ? data.message.trim() : '';
-                        if (activeId && activeId !== this.playerData.playerUniqueId) {
-                            this.connectToPeer(activeId);
-                            break;
-                        }
-                    } catch (e) {}
-                }
-            }).catch(() => {});
-    }
-
-    startHeartbeatSignal() {
-        const sendSignal = () => {
-            if (this.isConnected || !this.playerData.playerUniqueId) return;
-            fetch(this.signalTopicUrl, {
-                method: 'POST',
-                body: this.playerData.playerUniqueId
-            }).catch(() => {});
-        };
-
-        sendSignal();
-        if (!this.heartbeatTimer) {
-            this.heartbeatTimer = setInterval(sendSignal, 3000);
-        }
-    }
-
-    listenForPeerSignal() {
-        if (typeof EventSource === 'undefined') return;
-
-        const eventSource = new EventSource(`${this.signalTopicUrl}/sse`);
-        eventSource.onmessage = (event) => {
-            if (this.isConnected) return;
+        this.client.on('message', (topic, message) => {
             try {
-                const data = JSON.parse(event.data);
-                const receivedPeerId = data.message ? data.message.trim() : '';
-
-                if (receivedPeerId && receivedPeerId !== this.playerData.playerUniqueId) {
-                    this.connectToPeer(receivedPeerId);
+                const data = JSON.parse(message.toString());
+                if (data && data.senderId !== this.playerData.playerUniqueId) {
+                    KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: data.name });
+                    KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
                 }
             } catch (e) {}
-        };
-    }
-
-    connectToPeer(targetPeerId) {
-        if (!this.peer || this.isConnected) return;
-        const cleanId = targetPeerId.trim();
-        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connecting to ${cleanId.substr(0, 6)}...`, status: 'connecting' });
-        
-        this.connection = this.peer.connect(cleanId, { reliable: true });
-        this.isHost = false;
-
-        this.connection.on('open', () => {
-            this.isConnected = true;
-            this.playerData.setFriendId(cleanId);
-            this.setupConnectionListeners();
-            this.connection.send({ type: 'HANDSHAKE_INIT', name: this.playerData.playerName });
-            KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false });
         });
 
-        this.connection.on('error', () => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retry pairing...`, status: 'error' });
-        });
-    }
-
-    setupConnectionListeners() {
-        if (!this.connection) return;
-
-        this.connection.on('data', (data) => {
-            if (data.type === 'HANDSHAKE_ACK' || data.type === 'HANDSHAKE_INIT') {
-                this.isConnected = true;
-                KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: this.isHost, friendName: data.name });
-            } else if (data.type === 'PLAYER_STATE') {
-                KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
-            }
+        this.client.on('error', () => {
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'Reconnecting WebSocket...', status: 'error' });
         });
 
-        this.connection.on('close', () => {
+        this.client.on('offline', () => {
             this.isConnected = false;
-            KASurvival.globalEventBus.emit('FRIEND_DISCONNECTED');
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'WebSocket Offline', status: 'error' });
         });
     }
 
     broadcastPlayerState(position, rotation, isMoving, isRunning, playerName) {
-        if (!this.isConnected || !this.connection) return;
-        this.connection.send({
-            type: 'PLAYER_STATE',
+        if (!this.isConnected || !this.client) return;
+
+        const payload = JSON.stringify({
+            senderId: this.playerData.playerUniqueId,
+            name: playerName || this.playerData.playerName || 'Friend',
             x: position.x, y: position.y, z: position.z,
             rotation: rotation,
             isMoving: isMoving,
-            isRunning: isRunning,
-            name: playerName
+            isRunning: isRunning
         });
+
+        this.client.publish(this.topic, payload);
     }
 }
 KASurvival.NetworkManager = NetworkManager;
@@ -968,7 +899,7 @@ class HUD {
     setupEventBus() {
         KASurvival.globalEventBus.on('ROOM_CODE_ASSIGNED', (code) => {
             if (this.roomCodeEl) {
-                this.roomCodeEl.textContent = code ? code.substr(0, 10) : '------';
+                this.roomCodeEl.textContent = code || 'KA-WORLD';
             }
         });
 
@@ -976,9 +907,13 @@ class HUD {
             if (this.statusTextEl) this.statusTextEl.textContent = data.text;
             if (this.friendDotEl) {
                 this.friendDotEl.className = 'friend-dot';
-                if (data.status === 'connecting') this.friendDotEl.style.backgroundColor = '#60a5fa';
-                else if (data.status === 'error') this.friendDotEl.style.backgroundColor = '#ef4444';
-                else this.friendDotEl.style.backgroundColor = '#fbbf24';
+                if (data.status === 'connected') {
+                    this.friendDotEl.className = 'friend-dot online';
+                } else if (data.status === 'connecting') {
+                    this.friendDotEl.style.backgroundColor = '#60a5fa';
+                } else if (data.status === 'error') {
+                    this.friendDotEl.style.backgroundColor = '#ef4444';
+                }
             }
         });
 
@@ -986,7 +921,7 @@ class HUD {
             const badge = document.getElementById('friend-status-badge');
             if (badge) badge.style.display = 'flex';
             if (this.statusTextEl) {
-                this.statusTextEl.innerHTML = `<b style="color:#10b981;">Connected: ${data.friendName || 'Friend'}</b>`;
+                this.statusTextEl.innerHTML = `<b style="color:#10b981;">Online Partner: ${data.friendName || 'Friend'}</b>`;
             }
             if (this.friendDotEl) {
                 this.friendDotEl.className = 'friend-dot online';
@@ -995,7 +930,7 @@ class HUD {
 
         KASurvival.globalEventBus.on('FRIEND_DISCONNECTED', () => {
             if (this.statusTextEl) {
-                this.statusTextEl.textContent = 'Friend Disconnected';
+                this.statusTextEl.textContent = 'Friend Offline';
             }
             if (this.friendDotEl) {
                 this.friendDotEl.className = 'friend-dot';
@@ -1024,7 +959,7 @@ class HUD {
         const triggerJoin = () => {
             const code = this.inputJoinCode.value.trim();
             if (code && this.networkManager) {
-                this.networkManager.connectToPeer(code);
+                this.networkManager.setRoomName(code);
             }
         };
 

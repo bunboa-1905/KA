@@ -16,9 +16,9 @@
     <link rel="stylesheet" href="css/inventory.css">
     <link rel="stylesheet" href="css/touch.css">
 
-    <!-- Three.js & PeerJS CDNs -->
+    <!-- Three.js & MQTT WebSocket CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
 </head>
 <body>
     <div id="game-container">
@@ -29,7 +29,7 @@
             <div class="login-card glass-panel">
                 <div class="game-badge" style="margin: 0 auto 12px auto;">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v0.6</span>
+                    <span class="badge-text">KA SURVIVAL v1.0</span>
                 </div>
                 <h1 class="login-title">PLAYER LOGIN</h1>
                 <p class="login-subtitle">Enter your character name to enter the 3D world</p>
@@ -49,7 +49,7 @@
             <div class="hud-header">
                 <div class="game-badge">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v0.6</span>
+                    <span class="badge-text">KA SURVIVAL v1.0</span>
                 </div>
                 <h1 class="hud-title">KA Survival</h1>
             </div>
@@ -90,19 +90,19 @@
                     <span id="player-state" class="stat-value active">Standing Still</span>
                 </div>
                 <div class="stat-row">
-                    <span class="stat-label">Room Code:</span>
-                    <span id="room-code-display" class="stat-value" style="color: #f59e0b;">------</span>
+                    <span class="stat-label">Room World:</span>
+                    <span id="room-code-display" class="stat-value" style="color: #38bdf8;">KA-WORLD</span>
                 </div>
 
                 <!-- Co-op Friend Badge -->
                 <div id="friend-status-badge" class="friend-badge">
                     <span class="friend-dot"></span>
-                    <span id="friend-status-text">Searching for Friend...</span>
+                    <span id="friend-status-text">Connecting to WebSocket Server...</span>
                 </div>
 
-                <!-- Join Code Input Form -->
+                <!-- Join Custom Room Input Form -->
                 <div class="join-room-group">
-                    <input type="text" id="input-join-code" class="join-input" placeholder="Join Code..." maxlength="20" autocomplete="off">
+                    <input type="text" id="input-join-code" class="join-input" placeholder="Custom Room Name..." maxlength="20" autocomplete="off">
                     <button id="btn-join-room" class="join-btn">JOIN</button>
                 </div>
 
