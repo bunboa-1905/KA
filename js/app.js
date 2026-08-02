@@ -788,7 +788,7 @@ class NetworkManager {
         this.client.publish(this.topic, payload);
     }
 }
-NetworkManager;
+KASurvival.NetworkManager = NetworkManager;
 
 // ===================================================
 // 12. DAY/NIGHT SYSTEM & COMBAT SYSTEM
