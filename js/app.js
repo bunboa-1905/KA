@@ -855,23 +855,11 @@ KASurvival.Environment = Environment;
 class NetworkManager {
     constructor(playerData) {
         this.playerData = playerData;
-        this.roomName = '8899';
         this.isConnected = false;
-        
-        // Wait for Firebase to initialize from index.html dummy config
-        setTimeout(() => this.connectFirebase(), 1000);
+        this.isOnlineRef = null;
     }
 
-    setRoomName(newRoomName) {
-        if (!newRoomName) return;
-        this.roomName = newRoomName.trim().toUpperCase();
-        window.history.replaceState(null, null, `#room=${this.roomName}`);
-        KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
-
-        this.connectFirebase();
-    }
-
-    connectFirebase() {
+    connectToWorld(playerName) {
         if (typeof firebase === 'undefined' || !firebase.apps.length) {
             console.error("Firebase chưa được cấu hình. Vui lòng cập nhật firebaseConfig trong index.html");
             return;
@@ -879,37 +867,42 @@ class NetworkManager {
 
         try {
             if (!this.db) this.db = firebase.database();
+            const safeName = playerName.replace(/[^a-zA-Z0-9]/g, '_'); // Safe node name
+            this.playerData.playerUniqueId = safeName; // Force unique ID to be the player name
 
-            // Dọn dẹp kết nối phòng cũ nếu có
-            if (this.roomRef) {
-                this.roomRef.off();
-            }
-            if (this.myRef) {
-                this.myRef.onDisconnect().cancel();
-                this.myRef.remove();
-            }
+            this.worldRef = this.db.ref('world/players');
+            this.myRef = this.worldRef.child(this.playerData.playerUniqueId);
+            this.isOnlineRef = this.myRef.child('isOnline');
 
-            this.roomRef = this.db.ref('rooms/' + this.roomName + '/players');
-            this.myRef = this.roomRef.child(this.playerData.playerUniqueId);
+            // Tính năng 1: Lấy dữ liệu tọa độ lưu trữ từ trước
+            this.myRef.once('value').then((snapshot) => {
+                const data = snapshot.val();
+                if (data && data.x !== undefined) {
+                    KASurvival.globalEventBus.emit('PLAYER_DATA_LOADED', data);
+                }
+                
+                // Đánh dấu online
+                this.isOnlineRef.set(true);
+                
+                // Tính năng 2: Chống bóng ma. Tự động set isOnline = false khi thoát web
+                this.isOnlineRef.onDisconnect().set(false);
+                
+                this.isConnected = true;
+                this.broadcastPlayerState({ x: data?.x || 0, y: 0, z: data?.z || 0 }, 0, false, false, playerName);
+            });
 
-            // Tự động xóa khỏi DB khi đóng trình duyệt
-            this.myRef.onDisconnect().remove();
-
-            this.isConnected = true;
-
-            // Broadcast ngay khi join để báo cho người khác
-            this.broadcastPlayerState({ x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName);
-
-            // Lắng nghe 60fps từ tất cả người chơi khác trong phòng
-            this.roomRef.on('value', (snapshot) => {
+            // Lắng nghe TẤT CẢ người chơi trong World
+            this.worldRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (!data) return;
 
                 for (const [playerId, pData] of Object.entries(data)) {
                     if (playerId !== this.playerData.playerUniqueId) {
-                        KASurvival.globalEventBus.emit('LOBBY_FRIEND_JOINED', pData.name);
-                        KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: pData.name });
-                        KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', pData);
+                        if (pData.isOnline) {
+                            KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', { id: playerId, ...pData });
+                        } else {
+                            KASurvival.globalEventBus.emit('REMOTE_PLAYER_DISCONNECT', playerId);
+                        }
                     }
                 }
             });
@@ -922,12 +915,13 @@ class NetworkManager {
         if (!this.isConnected || !this.myRef) return;
 
         const payload = {
-            senderId: this.playerData.playerUniqueId,
-            name: playerName || this.playerData.playerName || 'Friend',
+            id: this.playerData.playerUniqueId,
+            name: playerName,
             x: position.x, y: position.y, z: position.z,
             rotation: rotation,
             isMoving: isMoving,
             isRunning: isRunning,
+            isOnline: true,
             timestamp: Date.now()
         };
 
@@ -1340,7 +1334,7 @@ class KASurvivalGame {
 
         this.environment = new KASurvival.Environment(this.engine.scene);
         this.player = new KASurvival.Player(this.engine.scene, this.playerData.playerName || "Player");
-        this.remotePlayer = null;
+        this.remotePlayers = {}; // Cập nhật để hỗ trợ MMO nhiều người chơi
 
         this.networkManager = new KASurvival.NetworkManager(this.playerData);
         this.dayNightSystem = new KASurvival.DayNightSystem(this.engine);
@@ -1350,16 +1344,12 @@ class KASurvivalGame {
         this.joystick = new KASurvival.Joystick(this.inputManager);
         this.inventoryUI = new KASurvival.InventoryUI(this.playerData);
 
-        // Lobby UI Controller
-        this.lobbyUI = new KASurvival.LobbyUI(this.playerData, this.networkManager, () => {
-            document.getElementById('ui-overlay').style.display = 'flex';
-            KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
-        });
-
         // Login UI Controller
         this.loginUI = new KASurvival.LoginUI(this.playerData, (playerName) => {
             this.player.setName(playerName);
-            this.lobbyUI.show();
+            this.networkManager.connectToWorld(playerName);
+            document.getElementById('ui-overlay').style.display = 'flex';
+            KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
         });
 
         this.setupNetworkEvents();
@@ -1367,24 +1357,26 @@ class KASurvivalGame {
     }
 
     setupNetworkEvents() {
-        KASurvival.globalEventBus.on('FRIEND_CONNECTED', (data) => {
-            if (!this.remotePlayer) {
-                this.remotePlayer = new KASurvival.RemotePlayer(this.engine.scene, data.friendName || "Friend");
-            } else if (data.friendName) {
-                this.remotePlayer.setName(data.friendName);
+        KASurvival.globalEventBus.on('PLAYER_DATA_LOADED', (data) => {
+            if (data.x !== undefined && data.z !== undefined) {
+                this.player.position.set(data.x, data.y || 0, data.z);
+                this.player.targetPosition.copy(this.player.position);
+                this.player.mesh.position.copy(this.player.position);
             }
         });
 
         KASurvival.globalEventBus.on('REMOTE_PLAYER_UPDATE', (data) => {
-            if (this.remotePlayer) {
-                this.remotePlayer.updateNetworkState(data);
+            const id = data.id;
+            if (!this.remotePlayers[id]) {
+                this.remotePlayers[id] = new KASurvival.RemotePlayer(this.engine.scene, data.name || "Friend");
             }
+            this.remotePlayers[id].updateNetworkState(data);
         });
 
-        KASurvival.globalEventBus.on('FRIEND_DISCONNECTED', () => {
-            if (this.remotePlayer) {
-                this.remotePlayer.destroy();
-                this.remotePlayer = null;
+        KASurvival.globalEventBus.on('REMOTE_PLAYER_DISCONNECT', (id) => {
+            if (this.remotePlayers[id]) {
+                this.remotePlayers[id].destroy();
+                delete this.remotePlayers[id];
             }
         });
     }
@@ -1397,8 +1389,8 @@ class KASurvivalGame {
         const movementVector = this.inputManager.getMovementVector();
         this.player.update(deltaTime, movementVector, this.inputManager.cameraYaw);
 
-        if (this.remotePlayer) {
-            this.remotePlayer.update(deltaTime);
+        for (const id in this.remotePlayers) {
+            this.remotePlayers[id].update(deltaTime);
         }
 
         const target = this.player.position.clone().add(new THREE.Vector3(0, 1.5, 0));
