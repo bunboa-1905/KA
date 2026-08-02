@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Features: Auto-Generated Unique Peer Cloud IDs, Google STUN ICE Servers, Login System, 2-Player Co-op
+ * Features: 2-Way Handshake ACK, Room Code Join Input, Google STUN ICE Servers, PeerJS Cloud
  * Engine: Three.js
  */
 
@@ -711,7 +711,7 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (Auto-Generated Unique Cloud IDs + STUN)
+// 11. NETWORK MANAGER (2-Way Handshake ACK + Join Code)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
@@ -720,7 +720,7 @@ class NetworkManager {
         this.connection = null;
         this.isHost = false;
         this.isConnected = false;
-        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v4';
+        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v5';
         this.heartbeatTimer = null;
 
         this.initPeer();
@@ -729,7 +729,6 @@ class NetworkManager {
     initPeer() {
         if (typeof Peer === 'undefined') return;
 
-        // Allow PeerJS Cloud Server to auto-assign a 100% unique ID with Google STUN Servers
         this.peer = new Peer({
             config: {
                 iceServers: [
@@ -744,20 +743,25 @@ class NetworkManager {
 
         this.peer.on('open', (id) => {
             this.playerData.playerUniqueId = id;
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `My Cloud ID: ${id.substr(0, 6)}... (Searching)`, status: 'waiting' });
+            KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', id);
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Searching for Friend...`, status: 'waiting' });
             this.registerAndAutoPair();
         });
 
         this.peer.on('connection', (conn) => {
             this.connection = conn;
             this.isHost = true;
-            this.isConnected = true;
-            this.setupConnectionListeners();
-            KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: true });
+            
+            this.connection.on('open', () => {
+                this.isConnected = true;
+                this.setupConnectionListeners();
+                this.connection.send({ type: 'HANDSHAKE_ACK', name: this.playerData.playerName });
+                KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: true });
+            });
         });
 
-        this.peer.on('error', (err) => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Reconnecting cloud server...`, status: 'error' });
+        this.peer.on('error', () => {
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retrying network...`, status: 'error' });
             setTimeout(() => this.registerAndAutoPair(), 2000);
         });
     }
@@ -765,7 +769,6 @@ class NetworkManager {
     registerAndAutoPair() {
         if (!this.playerData.playerUniqueId) return;
 
-        // 1. Check URL Hash first (#room=...)
         const hash = window.location.hash;
         if (hash.includes('#room=')) {
             const targetPeerId = hash.split('#room=')[1];
@@ -775,16 +778,9 @@ class NetworkManager {
             }
         }
 
-        // 2. Update URL Hash with my assigned cloud ID
         window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
-
-        // 3. Poll active host signal from ntfy.sh
         this.fetchActiveHostAndConnect();
-
-        // 4. Start 3-second heartbeat signaling
         this.startHeartbeatSignal();
-
-        // 5. Listen to SSE live stream for incoming friends
         this.listenForPeerSignal();
     }
 
@@ -841,19 +837,22 @@ class NetworkManager {
 
     connectToPeer(targetPeerId) {
         if (!this.peer || this.isConnected) return;
-        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Pairing with ${targetPeerId.substr(0, 6)}...`, status: 'connecting' });
-        this.connection = this.peer.connect(targetPeerId, { reliable: true });
+        const cleanId = targetPeerId.trim();
+        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connecting to ${cleanId.substr(0, 6)}...`, status: 'connecting' });
+        
+        this.connection = this.peer.connect(cleanId, { reliable: true });
         this.isHost = false;
 
         this.connection.on('open', () => {
             this.isConnected = true;
-            this.playerData.setFriendId(targetPeerId);
+            this.playerData.setFriendId(cleanId);
             this.setupConnectionListeners();
+            this.connection.send({ type: 'HANDSHAKE_INIT', name: this.playerData.playerName });
             KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false });
         });
 
         this.connection.on('error', () => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retrying pairing...`, status: 'error' });
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retry pairing...`, status: 'error' });
         });
     }
 
@@ -861,7 +860,10 @@ class NetworkManager {
         if (!this.connection) return;
 
         this.connection.on('data', (data) => {
-            if (data.type === 'PLAYER_STATE') {
+            if (data.type === 'HANDSHAKE_ACK' || data.type === 'HANDSHAKE_INIT') {
+                this.isConnected = true;
+                KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: this.isHost, friendName: data.name });
+            } else if (data.type === 'PLAYER_STATE') {
                 KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
             }
         });
@@ -942,21 +944,34 @@ KASurvival.CombatSystem = CombatSystem;
 // 13. HUD & LOGIN UI CONTROLLER
 // ===================================================
 class HUD {
-    constructor(playerData) {
+    constructor(playerData, networkManager) {
         this.playerData = playerData;
+        this.networkManager = networkManager;
+
         this.nameDisplayEl = document.getElementById('player-display-name');
         this.stateEl = document.getElementById('player-state');
         this.speedEl = document.getElementById('player-speed');
         this.posEl = document.getElementById('player-pos');
+        this.roomCodeEl = document.getElementById('room-code-display');
         this.btnCopyInvite = document.getElementById('btn-copy-invite');
         this.friendDotEl = document.querySelector('.friend-dot');
         this.statusTextEl = document.getElementById('friend-status-text');
 
+        this.inputJoinCode = document.getElementById('input-join-code');
+        this.btnJoinRoom = document.getElementById('btn-join-room');
+
         this.setupEventBus();
         this.setupCopyInviteButton();
+        this.setupJoinRoomButton();
     }
 
     setupEventBus() {
+        KASurvival.globalEventBus.on('ROOM_CODE_ASSIGNED', (code) => {
+            if (this.roomCodeEl) {
+                this.roomCodeEl.textContent = code ? code.substr(0, 10) : '------';
+            }
+        });
+
         KASurvival.globalEventBus.on('NETWORK_STATUS', (data) => {
             if (this.statusTextEl) this.statusTextEl.textContent = data.text;
             if (this.friendDotEl) {
@@ -971,7 +986,7 @@ class HUD {
             const badge = document.getElementById('friend-status-badge');
             if (badge) badge.style.display = 'flex';
             if (this.statusTextEl) {
-                this.statusTextEl.innerHTML = `<b style="color:#10b981;">Friend Connected (${data.isHost ? 'Client' : 'Host'})</b>`;
+                this.statusTextEl.innerHTML = `<b style="color:#10b981;">Connected: ${data.friendName || 'Friend'}</b>`;
             }
             if (this.friendDotEl) {
                 this.friendDotEl.className = 'friend-dot online';
@@ -1001,6 +1016,21 @@ class HUD {
             } else {
                 this.fallbackCopyText(currentUrl);
             }
+        });
+    }
+
+    setupJoinRoomButton() {
+        if (!this.btnJoinRoom || !this.inputJoinCode) return;
+        const triggerJoin = () => {
+            const code = this.inputJoinCode.value.trim();
+            if (code && this.networkManager) {
+                this.networkManager.connectToPeer(code);
+            }
+        };
+
+        this.btnJoinRoom.addEventListener('click', triggerJoin);
+        this.inputJoinCode.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') triggerJoin();
         });
     }
 
@@ -1234,7 +1264,7 @@ class KASurvivalGame {
         this.dayNightSystem = new KASurvival.DayNightSystem(this.engine);
         this.combatSystem = new KASurvival.CombatSystem();
 
-        this.hud = new KASurvival.HUD(this.playerData);
+        this.hud = new KASurvival.HUD(this.playerData, this.networkManager);
         this.joystick = new KASurvival.Joystick(this.inputManager);
         this.inventoryUI = new KASurvival.InventoryUI(this.playerData);
 
@@ -1249,9 +1279,11 @@ class KASurvivalGame {
     }
 
     setupNetworkEvents() {
-        KASurvival.globalEventBus.on('FRIEND_CONNECTED', () => {
+        KASurvival.globalEventBus.on('FRIEND_CONNECTED', (data) => {
             if (!this.remotePlayer) {
-                this.remotePlayer = new KASurvival.RemotePlayer(this.engine.scene, "Friend");
+                this.remotePlayer = new KASurvival.RemotePlayer(this.engine.scene, data.friendName || "Friend");
+            } else if (data.friendName) {
+                this.remotePlayer.setName(data.friendName);
             }
         });
 

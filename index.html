@@ -29,7 +29,7 @@
             <div class="login-card glass-panel">
                 <div class="game-badge" style="margin: 0 auto 12px auto;">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v0.5</span>
+                    <span class="badge-text">KA SURVIVAL v0.6</span>
                 </div>
                 <h1 class="login-title">PLAYER LOGIN</h1>
                 <p class="login-subtitle">Enter your character name to enter the 3D world</p>
@@ -49,7 +49,7 @@
             <div class="hud-header">
                 <div class="game-badge">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v0.5</span>
+                    <span class="badge-text">KA SURVIVAL v0.6</span>
                 </div>
                 <h1 class="hud-title">KA Survival</h1>
             </div>
@@ -90,19 +90,22 @@
                     <span id="player-state" class="stat-value active">Standing Still</span>
                 </div>
                 <div class="stat-row">
-                    <span class="stat-label">Speed:</span>
-                    <span id="player-speed" class="stat-value">0.0 m/s</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Coordinates:</span>
-                    <span id="player-pos" class="stat-value">(0.0, 0.0)</span>
+                    <span class="stat-label">Room Code:</span>
+                    <span id="room-code-display" class="stat-value" style="color: #f59e0b;">------</span>
                 </div>
 
-                <!-- Co-op Friend Badge & Invite Button -->
-                <div id="friend-status-badge" class="friend-badge" style="display: flex;">
+                <!-- Co-op Friend Badge -->
+                <div id="friend-status-badge" class="friend-badge">
                     <span class="friend-dot"></span>
-                    <span id="friend-status-text">Auto-pairing with Friend...</span>
+                    <span id="friend-status-text">Searching for Friend...</span>
                 </div>
+
+                <!-- Join Code Input Form -->
+                <div class="join-room-group">
+                    <input type="text" id="input-join-code" class="join-input" placeholder="Join Code..." maxlength="20" autocomplete="off">
+                    <button id="btn-join-room" class="join-btn">JOIN</button>
+                </div>
+
                 <button id="btn-copy-invite" class="invite-btn">
                     <span>📋 Copy Room Link</span>
                 </button>
