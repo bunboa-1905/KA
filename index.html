@@ -152,88 +152,100 @@
             </div>
         </div>
 
-        <!-- Glassmorphism Controls & Status Overlay -->
+        <!-- In-Game UI Overlay -->
         <div id="ui-overlay" style="display: none;">
-            <div class="hud-header">
-                <div class="game-badge">
-                    <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v2.0</span>
-                </div>
-                <h1 class="hud-title">KA Survival</h1>
-            </div>
+            
+            <!-- Settings Gear Button -->
+            <button id="btn-settings" class="settings-btn" onclick="document.getElementById('settings-modal').style.display='flex';">
+                ⚙️
+            </button>
 
-            <!-- Controls Info Card (PC) -->
-            <div class="controls-card glass-panel hide-on-mobile">
-                <div class="card-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2v20M2 12h20"/>
-                    </svg>
-                    <span>PC Controls</span>
-                </div>
-                <div class="control-grid">
-                    <div class="control-item">
-                        <div class="key-group">
-                            <div class="key-badge">W</div>
-                            <div class="key-badge">A</div>
-                            <div class="key-badge">S</div>
-                            <div class="key-badge">D</div>
-                        </div>
-                        <span>3D Movement</span>
-                    </div>
-                    <div class="control-item">
-                        <div class="key-badge wide">SHIFT</div>
-                        <span>Hold to Run</span>
+            <!-- Touch Controls for Mobile (Hidden by Default) -->
+            <div id="mobile-controls-wrapper" style="display: none;">
+                <div id="joystick-zone">
+                    <div id="joystick-base">
+                        <div id="joystick-stick"></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Status Panel & Friend Badge -->
-            <div class="status-panel glass-panel">
-                <div class="stat-row">
-                    <span class="stat-label">Player:</span>
-                    <span id="player-display-name" class="stat-value active">Player</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Status:</span>
-                    <span id="player-state" class="stat-value active">Standing Still</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Room Code:</span>
-                    <span id="room-code-display" class="stat-value" style="color: #38bdf8;">8899</span>
+                <div id="touch-action-zone">
+                    <button id="btn-touch-run" class="touch-btn">
+                        <span class="btn-icon">🏃</span>
+                        <span class="btn-label">RUN</span>
+                    </button>
                 </div>
 
-                <!-- Co-op Friend Badge -->
-                <div id="friend-status-badge" class="friend-badge">
-                    <span class="friend-dot online"></span>
-                    <span id="friend-status-text">Online Partner</span>
-                </div>
-
-                <button id="btn-copy-invite" class="invite-btn">
-                    <span>📋 Copy Room Link</span>
-                </button>
-            </div>
-
-            <!-- Quick Inventory Hotbar -->
-            <div id="hotbar-container"></div>
-
-            <!-- Touch Controls for Mobile -->
-            <div id="joystick-zone">
-                <div id="joystick-base">
-                    <div id="joystick-stick"></div>
+                <div id="camera-touch-hint" class="mobile-hint">
+                    <span>👉 Swipe right screen to rotate</span>
                 </div>
             </div>
 
-            <div id="touch-action-zone">
-                <button id="btn-touch-run" class="touch-btn">
-                    <span class="btn-icon">🏃</span>
-                    <span class="btn-label">RUN</span>
-                </button>
-            </div>
-
-            <div id="camera-touch-hint" class="mobile-hint">
-                <span>👉 Swipe right screen to rotate 3D camera</span>
+            <!-- Legacy UI Elements (Hidden to keep JS happy) -->
+            <div id="hidden-legacy-ui" style="display: none;">
+                <span id="player-display-name"></span>
+                <span id="player-state"></span>
+                <span id="room-code-display"></span>
+                <span id="friend-status-text"></span>
+                <div id="friend-status-badge"></div>
+                <div id="hotbar-container"></div>
+                <button id="btn-copy-invite"></button>
             </div>
         </div>
+
+        <!-- SETTINGS MODAL -->
+        <div id="settings-modal" class="login-overlay" style="display: none; z-index: 10000;">
+            <div class="login-card glass-panel" style="max-width: 320px; padding: 25px;">
+                <h1 class="login-title" style="margin-bottom: 25px;">CÀI ĐẶT</h1>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <span style="color: white; font-weight: 500;">Bật Controller (Điện thoại)</span>
+                    <label style="position: relative; display: inline-block; width: 50px; height: 28px;">
+                        <input type="checkbox" id="toggle-mobile-controls" style="opacity: 0; width: 0; height: 0;" onchange="document.getElementById('mobile-controls-wrapper').style.display = this.checked ? 'block' : 'none';">
+                        <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px;">
+                            <span style="position: absolute; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;" id="toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <button class="login-btn secondary" onclick="document.getElementById('settings-modal').style.display='none';" style="margin-top: 0;">
+                    <span>ĐÓNG</span>
+                </button>
+            </div>
+        </div>
+        
+        <script>
+            // CSS trực tiếp cho Toggle Switch để đỡ phải sửa file CSS
+            const style = document.createElement('style');
+            style.innerHTML = `
+                .settings-btn {
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    background: rgba(15, 23, 42, 0.7);
+                    border: 1px solid rgba(56, 189, 248, 0.3);
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    font-size: 24px;
+                    color: white;
+                    cursor: pointer;
+                    backdrop-filter: blur(8px);
+                    transition: transform 0.2s, background 0.2s;
+                    z-index: 100;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    pointer-events: auto !important;
+                }
+                .settings-btn:hover {
+                    transform: scale(1.1) rotate(45deg);
+                    background: rgba(15, 23, 42, 0.9);
+                }
+                input:checked + span { background-color: #38bdf8; }
+                input:checked + span span { transform: translateX(22px); }
+            `;
+            document.head.appendChild(style);
+        </script>
     </div>
 
     <!-- Application Script Entry Point -->
