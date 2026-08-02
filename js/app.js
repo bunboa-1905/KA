@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Features: Public WebSocket Realtime Relay Engine (EMQX / MQTT wss://), Login System, 2-Player Co-op
+ * Features: Server Lobby Screen (Step 1: Login, Step 2: Room Lobby, Step 3: 3D World), Public WebSocket Relay
  * Engine: Three.js
  */
 
@@ -33,6 +33,7 @@ KASurvival.globalEventBus = new EventBus();
 // ===================================================
 KASurvival.GAME_STATES = {
     LOGIN: 'LOGIN',
+    LOBBY: 'LOBBY',
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER'
@@ -222,7 +223,7 @@ class Engine {
 KASurvival.Engine = Engine;
 
 // ===================================================
-// 6. DATA LAYER (Items, PlayerData with Name Storage)
+// 6. DATA LAYER
 // ===================================================
 KASurvival.ITEMS = {
     WOOD: { id: 'wood', name: 'Wood', icon: '🪵', stackable: true },
@@ -382,7 +383,7 @@ class Player {
         this.rightPonytail = new THREE.Group();
         this.rightPonytail.position.set(0.4, 0.1, -0.1);
         const rightTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
-        rightTailMesh.position.set(0.05, -0.22, 0);
+        rightTailMesh.position.set(-0.05, -0.22, 0);
         rightTailMesh.castShadow = true;
         this.rightPonytail.add(rightTailMesh);
         this.rightPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
@@ -714,51 +715,35 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (Public WebSocket Realtime Relay Engine)
+// 11. NETWORK MANAGER (Public WebSocket Realtime Relay)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
         this.playerData = playerData;
         this.client = null;
-        this.roomName = 'KA-WORLD';
-        this.topic = 'ka_survival_v1/world';
+        this.roomName = '8899';
+        this.topic = 'ka_survival_v2/room_8899';
         this.isConnected = false;
 
-        this.initRoomFromHash();
         this.connectWebSocket();
-    }
-
-    initRoomFromHash() {
-        const hash = window.location.hash;
-        if (hash.includes('#room=')) {
-            const customRoom = hash.split('#room=')[1].trim();
-            if (customRoom) {
-                this.roomName = customRoom.toUpperCase();
-                this.topic = `ka_survival_v1/${this.roomName.toLowerCase()}`;
-            }
-        }
-        window.history.replaceState(null, null, `#room=${this.roomName}`);
-        KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
     }
 
     setRoomName(newRoomName) {
         if (!newRoomName) return;
         this.roomName = newRoomName.trim().toUpperCase();
-        this.topic = `ka_survival_v1/${this.roomName.toLowerCase()}`;
+        this.topic = `ka_survival_v2/room_${this.roomName.toLowerCase()}`;
         window.history.replaceState(null, null, `#room=${this.roomName}`);
         KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
 
         if (this.client && this.isConnected) {
             this.client.subscribe(this.topic);
+            this.broadcastPlayerState({ x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName);
         }
     }
 
     connectWebSocket() {
         if (typeof mqtt === 'undefined') return;
 
-        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'Connecting WebSocket Engine...', status: 'connecting' });
-
-        // Enterprise-grade Public SSL WebSocket Broker (wss:// via Port 8084 / 443)
         const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
         const clientId = 'ka_player_' + Math.random().toString(36).substr(2, 8);
 
@@ -771,14 +756,8 @@ class NetworkManager {
 
         this.client.on('connect', () => {
             this.isConnected = true;
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `🟢 Online (Room: ${this.roomName})`, status: 'connected' });
-            
-            this.client.subscribe(this.topic, (err) => {
-                if (!err) {
-                    this.broadcastPlayerState(
-                        { x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName
-                    );
-                }
+            this.client.subscribe(this.topic, () => {
+                this.broadcastPlayerState({ x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName);
             });
         });
 
@@ -786,19 +765,11 @@ class NetworkManager {
             try {
                 const data = JSON.parse(message.toString());
                 if (data && data.senderId !== this.playerData.playerUniqueId) {
+                    KASurvival.globalEventBus.emit('LOBBY_FRIEND_JOINED', data.name);
                     KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: data.name });
                     KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
                 }
             } catch (e) {}
-        });
-
-        this.client.on('error', () => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'Reconnecting WebSocket...', status: 'error' });
-        });
-
-        this.client.on('offline', () => {
-            this.isConnected = false;
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: 'WebSocket Offline', status: 'error' });
         });
     }
 
@@ -817,7 +788,7 @@ class NetworkManager {
         this.client.publish(this.topic, payload);
     }
 }
-KASurvival.NetworkManager = NetworkManager;
+NetworkManager;
 
 // ===================================================
 // 12. DAY/NIGHT SYSTEM & COMBAT SYSTEM
@@ -872,8 +843,122 @@ class CombatSystem {
 KASurvival.CombatSystem = CombatSystem;
 
 // ===================================================
-// 13. HUD & LOGIN UI CONTROLLER
+// 13. LOGIN & LOBBY UI CONTROLLERS
 // ===================================================
+class LoginUI {
+    constructor(playerData, onLoginSuccess) {
+        this.playerData = playerData;
+        this.onLoginSuccess = onLoginSuccess;
+
+        this.loginModalEl = document.getElementById('login-modal');
+        this.nameInputEl = document.getElementById('player-name-input');
+        this.startBtnEl = document.getElementById('btn-login-start');
+
+        this.init();
+    }
+
+    init() {
+        if (this.playerData.playerName && this.nameInputEl) {
+            this.nameInputEl.value = this.playerData.playerName;
+        }
+
+        if (this.startBtnEl) {
+            this.startBtnEl.addEventListener('click', () => this.handleLogin());
+        }
+
+        if (this.nameInputEl) {
+            this.nameInputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.handleLogin();
+            });
+        }
+    }
+
+    handleLogin() {
+        const inputName = this.nameInputEl ? this.nameInputEl.value.trim() : '';
+        const finalName = inputName || 'Player_' + Math.floor(Math.random() * 1000);
+
+        this.playerData.setPlayerName(finalName);
+        if (this.loginModalEl) this.loginModalEl.style.display = 'none';
+
+        if (this.onLoginSuccess) this.onLoginSuccess(finalName);
+    }
+}
+KASurvival.LoginUI = LoginUI;
+
+class LobbyUI {
+    constructor(playerData, networkManager, onEnterWorld) {
+        this.playerData = playerData;
+        this.networkManager = networkManager;
+        this.onEnterWorld = onEnterWorld;
+
+        this.lobbyModalEl = document.getElementById('lobby-modal');
+        this.btnCreateRoom = document.getElementById('btn-create-room');
+        this.btnJoinRoom = document.getElementById('btn-join-lobby-room');
+        this.inputJoinCode = document.getElementById('lobby-join-code-input');
+        this.actionsGroup = document.getElementById('lobby-actions-group');
+
+        this.roomInfoBox = document.getElementById('lobby-room-info');
+        this.lblRoomCode = document.getElementById('lbl-room-code');
+        this.lblMeName = document.getElementById('lbl-me-name');
+        this.chipFriend = document.getElementById('chip-friend');
+        this.btnEnterWorld = document.getElementById('btn-enter-world');
+
+        this.init();
+    }
+
+    init() {
+        if (this.btnCreateRoom) {
+            this.btnCreateRoom.addEventListener('click', () => {
+                const code = Math.floor(1000 + Math.random() * 9000).toString();
+                this.enterRoomLobby(code);
+            });
+        }
+
+        if (this.btnJoinRoom && this.inputJoinCode) {
+            const triggerJoin = () => {
+                const code = this.inputJoinCode.value.trim();
+                if (code) this.enterRoomLobby(code);
+            };
+            this.btnJoinRoom.addEventListener('click', triggerJoin);
+            this.inputJoinCode.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') triggerJoin();
+            });
+        }
+
+        if (this.btnEnterWorld) {
+            this.btnEnterWorld.addEventListener('click', () => {
+                if (this.lobbyModalEl) this.lobbyModalEl.style.display = 'none';
+                if (this.onEnterWorld) this.onEnterWorld();
+            });
+        }
+
+        KASurvival.globalEventBus.on('LOBBY_FRIEND_JOINED', (friendName) => {
+            if (this.chipFriend) {
+                this.chipFriend.className = 'player-chip online';
+                this.chipFriend.innerHTML = `<span>${friendName || 'Friend'} (Ready)</span>`;
+            }
+        });
+    }
+
+    show() {
+        if (this.lobbyModalEl) this.lobbyModalEl.style.display = 'flex';
+        KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.LOBBY);
+    }
+
+    enterRoomLobby(code) {
+        if (this.actionsGroup) this.actionsGroup.style.display = 'none';
+        if (this.roomInfoBox) this.roomInfoBox.style.display = 'block';
+
+        if (this.lblRoomCode) this.lblRoomCode.textContent = code;
+        if (this.lblMeName) this.lblMeName.textContent = `${this.playerData.playerName || 'Player'} (Ready)`;
+
+        if (this.networkManager) {
+            this.networkManager.setRoomName(code);
+        }
+    }
+}
+KASurvival.LobbyUI = LobbyUI;
+
 class HUD {
     constructor(playerData, networkManager) {
         this.playerData = playerData;
@@ -888,32 +973,14 @@ class HUD {
         this.friendDotEl = document.querySelector('.friend-dot');
         this.statusTextEl = document.getElementById('friend-status-text');
 
-        this.inputJoinCode = document.getElementById('input-join-code');
-        this.btnJoinRoom = document.getElementById('btn-join-room');
-
         this.setupEventBus();
         this.setupCopyInviteButton();
-        this.setupJoinRoomButton();
     }
 
     setupEventBus() {
         KASurvival.globalEventBus.on('ROOM_CODE_ASSIGNED', (code) => {
             if (this.roomCodeEl) {
-                this.roomCodeEl.textContent = code || 'KA-WORLD';
-            }
-        });
-
-        KASurvival.globalEventBus.on('NETWORK_STATUS', (data) => {
-            if (this.statusTextEl) this.statusTextEl.textContent = data.text;
-            if (this.friendDotEl) {
-                this.friendDotEl.className = 'friend-dot';
-                if (data.status === 'connected') {
-                    this.friendDotEl.className = 'friend-dot online';
-                } else if (data.status === 'connecting') {
-                    this.friendDotEl.style.backgroundColor = '#60a5fa';
-                } else if (data.status === 'error') {
-                    this.friendDotEl.style.backgroundColor = '#ef4444';
-                }
+                this.roomCodeEl.textContent = code || '8899';
             }
         });
 
@@ -925,15 +992,6 @@ class HUD {
             }
             if (this.friendDotEl) {
                 this.friendDotEl.className = 'friend-dot online';
-            }
-        });
-
-        KASurvival.globalEventBus.on('FRIEND_DISCONNECTED', () => {
-            if (this.statusTextEl) {
-                this.statusTextEl.textContent = 'Friend Offline';
-            }
-            if (this.friendDotEl) {
-                this.friendDotEl.className = 'friend-dot';
             }
         });
     }
@@ -951,21 +1009,6 @@ class HUD {
             } else {
                 this.fallbackCopyText(currentUrl);
             }
-        });
-    }
-
-    setupJoinRoomButton() {
-        if (!this.btnJoinRoom || !this.inputJoinCode) return;
-        const triggerJoin = () => {
-            const code = this.inputJoinCode.value.trim();
-            if (code && this.networkManager) {
-                this.networkManager.setRoomName(code);
-            }
-        };
-
-        this.btnJoinRoom.addEventListener('click', triggerJoin);
-        this.inputJoinCode.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') triggerJoin();
         });
     }
 
@@ -1006,49 +1049,6 @@ class HUD {
     }
 }
 KASurvival.HUD = HUD;
-
-class LoginUI {
-    constructor(playerData, onLoginSuccess) {
-        this.playerData = playerData;
-        this.onLoginSuccess = onLoginSuccess;
-
-        this.modalEl = document.getElementById('login-modal');
-        this.uiOverlayEl = document.getElementById('ui-overlay');
-        this.nameInputEl = document.getElementById('player-name-input');
-        this.startBtnEl = document.getElementById('btn-login-start');
-
-        this.init();
-    }
-
-    init() {
-        if (this.playerData.playerName && this.nameInputEl) {
-            this.nameInputEl.value = this.playerData.playerName;
-        }
-
-        if (this.startBtnEl) {
-            this.startBtnEl.addEventListener('click', () => this.handleLogin());
-        }
-
-        if (this.nameInputEl) {
-            this.nameInputEl.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') this.handleLogin();
-            });
-        }
-    }
-
-    handleLogin() {
-        const inputName = this.nameInputEl ? this.nameInputEl.value.trim() : '';
-        const finalName = inputName || 'Player_' + Math.floor(Math.random() * 1000);
-
-        this.playerData.setPlayerName(finalName);
-
-        if (this.modalEl) this.modalEl.style.display = 'none';
-        if (this.uiOverlayEl) this.uiOverlayEl.style.display = 'flex';
-
-        if (this.onLoginSuccess) this.onLoginSuccess(finalName);
-    }
-}
-KASurvival.LoginUI = LoginUI;
 
 class Joystick {
     constructor(inputManager) {
@@ -1203,10 +1203,16 @@ class KASurvivalGame {
         this.joystick = new KASurvival.Joystick(this.inputManager);
         this.inventoryUI = new KASurvival.InventoryUI(this.playerData);
 
+        // Lobby UI Controller
+        this.lobbyUI = new KASurvival.LobbyUI(this.playerData, this.networkManager, () => {
+            document.getElementById('ui-overlay').style.display = 'flex';
+            KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
+        });
+
         // Login UI Controller
         this.loginUI = new KASurvival.LoginUI(this.playerData, (playerName) => {
             this.player.setName(playerName);
-            KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
+            this.lobbyUI.show();
         });
 
         this.setupNetworkEvents();

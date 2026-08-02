@@ -24,23 +24,67 @@
     <div id="game-container">
         <canvas id="three-canvas"></canvas>
 
-        <!-- LOGIN MODAL OVERLAY -->
+        <!-- STEP 1: LOGIN MODAL OVERLAY -->
         <div id="login-modal" class="login-overlay">
             <div class="login-card glass-panel">
                 <div class="game-badge" style="margin: 0 auto 12px auto;">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v1.0</span>
+                    <span class="badge-text">KA SURVIVAL v2.0</span>
                 </div>
                 <h1 class="login-title">PLAYER LOGIN</h1>
-                <p class="login-subtitle">Enter your character name to enter the 3D world</p>
+                <p class="login-subtitle">Enter your character name to continue</p>
 
                 <div class="input-group">
                     <input type="text" id="player-name-input" class="login-input" placeholder="Enter Character Name..." maxlength="15" autocomplete="off">
                 </div>
 
                 <button id="btn-login-start" class="login-btn">
-                    <span>🚀 START SURVIVAL</span>
+                    <span>NEXT TO SERVER LOBBY ➡️</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- STEP 2: SERVER LOBBY MODAL OVERLAY -->
+        <div id="lobby-modal" class="login-overlay" style="display: none;">
+            <div class="login-card glass-panel" style="max-width: 440px;">
+                <div class="game-badge" style="margin: 0 auto 10px auto;">
+                    <span class="pulse-dot"></span>
+                    <span class="badge-text">SERVER LOBBY</span>
+                </div>
+                <h1 class="login-title">CO-OP MULTIPLAYER</h1>
+                <p class="login-subtitle">Create a new room or enter room code to join friend</p>
+
+                <!-- Room Selection Actions -->
+                <div id="lobby-actions-group" style="width: 100%; display: flex; flex-direction: column; gap: 10px;">
+                    <button id="btn-create-room" class="login-btn">
+                        <span>🏠 CREATE NEW ROOM</span>
+                    </button>
+
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <input type="text" id="lobby-join-code-input" class="login-input" placeholder="Room Code (e.g. 8899)" maxlength="10" autocomplete="off">
+                        <button id="btn-join-lobby-room" class="login-btn secondary" style="width: 110px; margin-top: 0;">
+                            <span>JOIN</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Room Info Box (shown after Create or Join) -->
+                <div id="lobby-room-info" style="display: none; width: 100%; margin-top: 10px;">
+                    <div class="room-code-tag">
+                        <span>ROOM CODE:</span>
+                        <b id="lbl-room-code" style="color: #38bdf8; font-size: 20px;">8899</b>
+                    </div>
+
+                    <p style="font-size: 12px; color: #94a3b8; margin: 8px 0 4px 0;">Players in Lobby:</p>
+                    <div id="lobby-player-list" class="player-list-box">
+                        <div class="player-chip active"><span id="lbl-me-name">Player 1 (Host)</span></div>
+                        <div id="chip-friend" class="player-chip waiting"><span>Waiting for Friend...</span></div>
+                    </div>
+
+                    <button id="btn-enter-world" class="login-btn start" style="margin-top: 14px;">
+                        <span>🚀 ENTER 3D WORLD</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -49,7 +93,7 @@
             <div class="hud-header">
                 <div class="game-badge">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v1.0</span>
+                    <span class="badge-text">KA SURVIVAL v2.0</span>
                 </div>
                 <h1 class="hud-title">KA Survival</h1>
             </div>
@@ -90,20 +134,14 @@
                     <span id="player-state" class="stat-value active">Standing Still</span>
                 </div>
                 <div class="stat-row">
-                    <span class="stat-label">Room World:</span>
-                    <span id="room-code-display" class="stat-value" style="color: #38bdf8;">KA-WORLD</span>
+                    <span class="stat-label">Room Code:</span>
+                    <span id="room-code-display" class="stat-value" style="color: #38bdf8;">8899</span>
                 </div>
 
                 <!-- Co-op Friend Badge -->
                 <div id="friend-status-badge" class="friend-badge">
-                    <span class="friend-dot"></span>
-                    <span id="friend-status-text">Connecting to WebSocket Server...</span>
-                </div>
-
-                <!-- Join Custom Room Input Form -->
-                <div class="join-room-group">
-                    <input type="text" id="input-join-code" class="join-input" placeholder="Custom Room Name..." maxlength="20" autocomplete="off">
-                    <button id="btn-join-room" class="join-btn">JOIN</button>
+                    <span class="friend-dot online"></span>
+                    <span id="friend-status-text">Online Partner</span>
                 </div>
 
                 <button id="btn-copy-invite" class="invite-btn">
