@@ -1065,6 +1065,8 @@ class NetworkManager {
         this.playerData = playerData;
         this.isConnected = false;
         this.isOnlineRef = null;
+        this.lastBroadcastTime = 0;
+        this.lastStateKey = '';
     }
 
     checkPlayerExists(playerName) {
@@ -1124,6 +1126,16 @@ class NetworkManager {
     broadcastPlayerState(position, rotation, isMoving, isRunning, playerName) {
         if (!this.isConnected || !this.myRef) return;
 
+        const now = Date.now();
+        const stateKey = `${isMoving}_${isRunning}`;
+        
+        // Rate limit: 10 times per second, UNLESS the animation state just changed
+        if (now - this.lastBroadcastTime < 100 && this.lastStateKey === stateKey) {
+            return;
+        }
+        this.lastBroadcastTime = now;
+        this.lastStateKey = stateKey;
+
         const payload = {
             id: this.playerData.playerUniqueId,
             name: playerName,
@@ -1133,7 +1145,7 @@ class NetworkManager {
             isMoving: isMoving,
             isRunning: isRunning,
             isOnline: true,
-            timestamp: Date.now()
+            timestamp: now
         };
 
         this.myRef.set(payload);
