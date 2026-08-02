@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Features: Google STUN ICE Servers, PeerJS HTTPS 443, Login System, 2-Player Co-op
+ * Features: Auto-Generated Unique Peer Cloud IDs, Google STUN ICE Servers, Login System, 2-Player Co-op
  * Engine: Three.js
  */
 
@@ -243,7 +243,7 @@ KASurvival.WORLD_CONFIG = {
 
 class PlayerData {
     constructor() {
-        this.playerUniqueId = this.loadOrGenerateUniqueId();
+        this.playerUniqueId = null;
         this.playerName = localStorage.getItem('ka_player_name') || '';
         this.friendLastKnownId = localStorage.getItem('ka_friend_id') || null;
 
@@ -255,15 +255,6 @@ class PlayerData {
             null, null, null
         ];
         this.equippedSlotIndex = 0;
-    }
-
-    loadOrGenerateUniqueId() {
-        let savedId = localStorage.getItem('ka_player_id');
-        if (!savedId) {
-            savedId = 'ka-player-' + Math.random().toString(36).substr(2, 6);
-            localStorage.setItem('ka_player_id', savedId);
-        }
-        return savedId;
     }
 
     setPlayerName(name) {
@@ -720,7 +711,7 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (Google STUN + HTTPS 443 + PeerJS)
+// 11. NETWORK MANAGER (Auto-Generated Unique Cloud IDs + STUN)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
@@ -729,7 +720,7 @@ class NetworkManager {
         this.connection = null;
         this.isHost = false;
         this.isConnected = false;
-        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v3';
+        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v4';
         this.heartbeatTimer = null;
 
         this.initPeer();
@@ -738,10 +729,8 @@ class NetworkManager {
     initPeer() {
         if (typeof Peer === 'undefined') return;
 
-        const myId = this.playerData.playerUniqueId;
-
-        // Configure Google STUN ICE Servers & Secure HTTPS 443
-        this.peer = new Peer(myId, {
+        // Allow PeerJS Cloud Server to auto-assign a 100% unique ID with Google STUN Servers
+        this.peer = new Peer({
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -754,7 +743,8 @@ class NetworkManager {
         });
 
         this.peer.on('open', (id) => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `My ID: ${id} (Waiting...)`, status: 'waiting' });
+            this.playerData.playerUniqueId = id;
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `My Cloud ID: ${id.substr(0, 6)}... (Searching)`, status: 'waiting' });
             this.registerAndAutoPair();
         });
 
@@ -767,11 +757,14 @@ class NetworkManager {
         });
 
         this.peer.on('error', (err) => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Network Error: Retrying...`, status: 'error' });
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Reconnecting cloud server...`, status: 'error' });
+            setTimeout(() => this.registerAndAutoPair(), 2000);
         });
     }
 
     registerAndAutoPair() {
+        if (!this.playerData.playerUniqueId) return;
+
         // 1. Check URL Hash first (#room=...)
         const hash = window.location.hash;
         if (hash.includes('#room=')) {
@@ -782,7 +775,7 @@ class NetworkManager {
             }
         }
 
-        // 2. Update URL Hash with my ID for easy sharing
+        // 2. Update URL Hash with my assigned cloud ID
         window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
 
         // 3. Poll active host signal from ntfy.sh
@@ -816,7 +809,7 @@ class NetworkManager {
 
     startHeartbeatSignal() {
         const sendSignal = () => {
-            if (this.isConnected) return;
+            if (this.isConnected || !this.playerData.playerUniqueId) return;
             fetch(this.signalTopicUrl, {
                 method: 'POST',
                 body: this.playerData.playerUniqueId
@@ -824,7 +817,9 @@ class NetworkManager {
         };
 
         sendSignal();
-        this.heartbeatTimer = setInterval(sendSignal, 3000);
+        if (!this.heartbeatTimer) {
+            this.heartbeatTimer = setInterval(sendSignal, 3000);
+        }
     }
 
     listenForPeerSignal() {
@@ -846,7 +841,7 @@ class NetworkManager {
 
     connectToPeer(targetPeerId) {
         if (!this.peer || this.isConnected) return;
-        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connecting to ${targetPeerId}...`, status: 'connecting' });
+        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Pairing with ${targetPeerId.substr(0, 6)}...`, status: 'connecting' });
         this.connection = this.peer.connect(targetPeerId, { reliable: true });
         this.isHost = false;
 
@@ -858,7 +853,7 @@ class NetworkManager {
         });
 
         this.connection.on('error', () => {
-            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connection retry...`, status: 'error' });
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Retrying pairing...`, status: 'error' });
         });
     }
 
