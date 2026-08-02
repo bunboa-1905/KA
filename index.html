@@ -18,6 +18,9 @@
 
     <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+    <script src="models/character_base64.js"></script>
 
     <!-- Firebase App & Database (Compat V10) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -96,11 +99,38 @@
                     <span class="badge-text">KA SURVIVAL v2.0</span>
                 </div>
                 <h1 class="login-title">PLAYER LOGIN</h1>
-                <p class="login-subtitle">Enter your character name to continue</p>
+                <p class="login-subtitle">Enter your character name & gender</p>
 
                 <div class="input-group">
                     <input type="text" id="player-name-input" class="login-input" placeholder="Enter Character Name..." maxlength="15" autocomplete="off">
                 </div>
+
+                <div class="gender-selection" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="btn-gender-female" class="gender-btn active" style="flex: 1; padding: 10px; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; border-radius: 8px; color: white; cursor: pointer; transition: 0.2s;">
+                        👩 Nữ
+                    </button>
+                    <button id="btn-gender-male" class="gender-btn" style="flex: 1; padding: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: white; cursor: pointer; transition: 0.2s;">
+                        👦 Nam
+                    </button>
+                </div>
+
+                <script>
+                    window.selectedGender = 'female';
+                    document.getElementById('btn-gender-female').addEventListener('click', function() {
+                        window.selectedGender = 'female';
+                        this.style.background = 'rgba(56, 189, 248, 0.2)';
+                        this.style.borderColor = '#38bdf8';
+                        document.getElementById('btn-gender-male').style.background = 'rgba(255, 255, 255, 0.05)';
+                        document.getElementById('btn-gender-male').style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    });
+                    document.getElementById('btn-gender-male').addEventListener('click', function() {
+                        window.selectedGender = 'male';
+                        this.style.background = 'rgba(56, 189, 248, 0.2)';
+                        this.style.borderColor = '#38bdf8';
+                        document.getElementById('btn-gender-female').style.background = 'rgba(255, 255, 255, 0.05)';
+                        document.getElementById('btn-gender-female').style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    });
+                </script>
 
                 <button id="btn-login-start" class="login-btn">
                     <span>ENTER WORLD 🌍</span>

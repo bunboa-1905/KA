@@ -64,9 +64,9 @@ class InputManager {
         this.joystickVector = { x: 0, y: 0, active: false };
         this.touchRunActive = false;
 
-        this.cameraYaw = 0;
-        this.cameraPitch = Math.PI / 6;
-        this.cameraDistance = 14;
+        this.cameraYaw = Math.PI / 4;
+        this.cameraPitch = Math.PI / 4; // Isometric higher angle
+        this.cameraDistance = 18;
 
         this.isMouseDown = false;
         this.previousMousePosition = { x: 0, y: 0 };
@@ -136,7 +136,8 @@ class InputManager {
         }
 
         const isRunning = !!(this.keysPressed['shift'] || this.keysPressed['shiftleft'] || this.touchRunActive);
-        return { moveX, moveZ, isRunning };
+        const isJumping = !!(this.keysPressed[' ']);
+        return { moveX, moveZ, isRunning, isJumping };
     }
 }
 KASurvival.InputManager = InputManager;
@@ -304,7 +305,175 @@ function createNameTagSprite(text, colorHex = '#ffffff') {
 }
 
 // ===================================================
-// 8. LOCAL PLAYER ENTITY (With Floating Name Tag)
+// 8b. HELPER: CANVAS FACE TEXTURE (Anime Style)
+// ===================================================
+function buildFaceTexture() {
+    const S = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = S; canvas.height = S;
+    const c = canvas.getContext('2d');
+
+    // Skin base
+    c.fillStyle = '#faf0f0';
+    c.fillRect(0, 0, S, S);
+
+    // Draw one anime eye
+    function drawEye(cx, cy, tilt) {
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(tilt);
+
+        // Clip to eye shape
+        c.beginPath();
+        c.moveTo(-34, 0);
+        c.bezierCurveTo(-34, -26, 34, -26, 34, 0);
+        c.bezierCurveTo(34, 20, -34, 20, -34, 0);
+        c.closePath();
+        c.save();
+        c.clip();
+
+        // White of eye
+        c.fillStyle = '#f2eeff';
+        c.fillRect(-36, -28, 72, 52);
+
+        // Iris gradient
+        const irisGrad = c.createRadialGradient(0, 2, 2, 0, 4, 22);
+        irisGrad.addColorStop(0,   '#4a2060');
+        irisGrad.addColorStop(0.3, '#2a1040');
+        irisGrad.addColorStop(0.7, '#150820');
+        irisGrad.addColorStop(1,   '#090410');
+        c.fillStyle = irisGrad;
+        c.beginPath();
+        c.ellipse(0, 4, 20, 24, 0, 0, Math.PI * 2);
+        c.fill();
+
+        // Pupil
+        c.fillStyle = '#050110';
+        c.beginPath();
+        c.ellipse(0, 6, 9, 12, 0, 0, Math.PI * 2);
+        c.fill();
+
+        // Main highlight (top-right)
+        c.fillStyle = 'rgba(255,255,255,0.95)';
+        c.beginPath();
+        c.ellipse(9, -7, 9, 11, -0.4, 0, Math.PI * 2);
+        c.fill();
+
+        // Secondary small highlight (bottom-left)
+        c.fillStyle = 'rgba(255,255,255,0.65)';
+        c.beginPath();
+        c.ellipse(-8, 12, 5, 5, 0, 0, Math.PI * 2);
+        c.fill();
+
+        c.restore(); // restore clip
+
+        // Top eyelash (thick arc)
+        c.strokeStyle = '#0d0408';
+        c.lineWidth = 7;
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(-36, -4);
+        c.bezierCurveTo(-24, -30, 24, -30, 36, -4);
+        c.stroke();
+
+        // Eyelash spikes
+        c.lineWidth = 3.5;
+        const spikes = [[-30,-20,-42,-34],[-18,-28,-24,-42],[0,-30,0,-44],[18,-28,24,-42],[30,-20,42,-34]];
+        spikes.forEach(([x1,y1,x2,y2]) => {
+            c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+        });
+
+        // Bottom lash line (thin)
+        c.strokeStyle = 'rgba(13,4,8,0.35)';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(-33, 18);
+        c.bezierCurveTo(-16, 24, 16, 24, 33, 18);
+        c.stroke();
+
+        c.restore();
+    }
+
+    // Left eye (outer corner slightly lower = droopy/sleepy)
+    drawEye(74, 105, -0.18);
+    // Right eye (mirrored tilt)
+    drawEye(182, 105, 0.18);
+
+    // Blush - soft radial gradient with dots
+    function drawBlush(bx, by) {
+        const bg = c.createRadialGradient(bx, by, 0, bx, by, 40);
+        bg.addColorStop(0,   'rgba(255,130,165,0.60)');
+        bg.addColorStop(0.45,'rgba(255,160,190,0.38)');
+        bg.addColorStop(1,   'rgba(255,190,215,0.00)');
+        c.fillStyle = bg;
+        c.beginPath();
+        c.ellipse(bx, by, 40, 26, 0, 0, Math.PI * 2);
+        c.fill();
+        // Small polka dots
+        c.fillStyle = 'rgba(235,90,145,0.45)';
+        for (let i = 0; i < 5; i++) {
+            c.beginPath();
+            c.arc(bx - 18 + i * 9, by + 5, 2.8, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+    drawBlush(50, 178);
+    drawBlush(206, 178);
+
+    // Cute small mouth
+    c.strokeStyle = '#d07878';
+    c.lineWidth = 3.5;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(102, 204);
+    c.quadraticCurveTo(128, 220, 154, 204);
+    c.stroke();
+
+    // Tiny nose hint
+    c.strokeStyle = 'rgba(180,120,120,0.4)';
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.moveTo(122, 172); c.lineTo(118, 184); c.lineTo(126, 184);
+    c.stroke();
+
+    return new THREE.CanvasTexture(canvas);
+}
+
+// ===================================================
+// 8. MODEL MANAGER (GLTF/GLB)
+// ===================================================
+KASurvival.ModelManager = class {
+    constructor() {
+        this.models = {};
+    }
+    loadModel(url, key, callback) {
+        if (this.models[key]) {
+            callback(this.models[key]);
+            return;
+        }
+        const loader = new THREE.GLTFLoader();
+        loader.load(url, (gltf) => {
+            this.models[key] = gltf;
+            console.log(`Loaded model: ${key}`, gltf.animations.map(a => a.name));
+            callback(gltf);
+        }, undefined, (error) => {
+            console.error('Error loading model:', error);
+        });
+    }
+    getClone(key) {
+        if (!this.models[key]) return null;
+        // Require THREE.SkeletonUtils to clone SkinnedMesh correctly
+        return THREE.SkeletonUtils.clone(this.models[key].scene);
+    }
+    getAnimations(key) {
+        if (!this.models[key]) return [];
+        return this.models[key].animations;
+    }
+};
+KASurvival.modelManager = new KASurvival.ModelManager();
+
+// ===================================================
+// 9. LOCAL PLAYER ENTITY (With Floating Name Tag)
 // ===================================================
 class Player {
     constructor(scene, name = "Player") {
@@ -321,6 +490,10 @@ class Player {
         this.isMoving = false;
         this.isRunning = false;
         this.walkTimer = 0;
+
+        this.mixer = null;
+        this.animations = {};
+        this.currentAction = null;
 
         this.mesh = new THREE.Group();
         this.playerBody = new THREE.Group();
@@ -344,138 +517,98 @@ class Player {
     }
 
     buildMesh() {
-        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe4e1, flatShading: true });
-        const hairMat = new THREE.MeshStandardMaterial({ color: 0xff80ab, flatShading: true });
-        const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xff1744, flatShading: true });
-        const eyesMat = new THREE.MeshBasicMaterial({ color: 0x2979ff });
-        const eyeHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const blushMat = new THREE.MeshBasicMaterial({ color: 0xff80ab, transparent: true, opacity: 0.7 });
-        const overallsMat = new THREE.MeshStandardMaterial({ color: 0x42a5f5, flatShading: true });
-        const sockMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
-        const shoeMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true });
+        const gender = this.gender || 'female';
+        const modelPath = gender === 'male' ? 'models/RPG_Pack/Characters/glTF/Character_Male_1.gltf' : 'models/RPG_Pack/Characters/glTF/Character_Female_1.gltf';
+        const cacheKey = 'player_' + gender;
 
-        // Head
-        this.headMesh = new THREE.Group();
-        this.headMesh.position.set(0, 1.75, 0);
+        // Load the GLTF model
+        KASurvival.modelManager.loadModel(modelPath, cacheKey, (gltf) => {
+            const clone = KASurvival.modelManager.getClone(cacheKey);
+            if (clone) {
+                clone.scale.set(1.5, 1.5, 1.5); 
+                clone.position.y = 0;
+                
+                // Fix shadows
+                clone.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
 
-        const headCube = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.65, 0.65), skinMat);
-        headCube.castShadow = true;
-        this.headMesh.add(headCube);
+                // Clear old meshes INSIDE the callback to prevent duplicating if called multiple times fast
+                while(this.playerBody.children.length > 0) { 
+                    this.playerBody.remove(this.playerBody.children[0]); 
+                }
 
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.28, 0.72), hairMat);
-        hairTop.position.set(0, 0.24, 0);
-        this.headMesh.add(hairTop);
+                this.playerBody.add(clone);
 
-        const frontBangs = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.2, 0.15), hairMat);
-        frontBangs.position.set(0, 0.15, 0.32);
-        this.headMesh.add(frontBangs);
+                // Set up animations
+                this.mixer = new THREE.AnimationMixer(clone);
+                const anims = KASurvival.modelManager.getAnimations(cacheKey);
+                this.animations = {};
+                anims.forEach((clip) => {
+                    this.animations[clip.name.toLowerCase()] = this.mixer.clipAction(clip);
+                });
+                
+                this.playAnimation('idle');
+            }
+        });
+    }
 
-        // Twin Tails
-        this.leftPonytail = new THREE.Group();
-        this.leftPonytail.position.set(-0.4, 0.1, -0.1);
-        const leftTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
-        leftTailMesh.position.set(-0.05, -0.22, 0);
-        leftTailMesh.castShadow = true;
-        this.leftPonytail.add(leftTailMesh);
-        this.leftPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
-        this.headMesh.add(this.leftPonytail);
-
-        this.rightPonytail = new THREE.Group();
-        this.rightPonytail.position.set(0.4, 0.1, -0.1);
-        const rightTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
-        rightTailMesh.position.set(-0.05, -0.22, 0);
-        rightTailMesh.castShadow = true;
-        this.rightPonytail.add(rightTailMesh);
-        this.rightPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
-        this.headMesh.add(this.rightPonytail);
-
-        // Eyes & Blush
-        const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
-        leftEye.position.set(-0.16, 0.02, 0.33);
-        const leftSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
-        leftSparkle.position.set(-0.14, 0.05, 0.34);
-
-        const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
-        rightEye.position.set(0.16, 0.02, 0.33);
-        const rightSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
-        rightSparkle.position.set(0.18, 0.05, 0.34);
-
-        this.headMesh.add(leftEye); this.headMesh.add(leftSparkle);
-        this.headMesh.add(rightEye); this.headMesh.add(rightSparkle);
-
-        const leftBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
-        leftBlush.position.set(-0.2, -0.08, 0.33);
-        const rightBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
-        rightBlush.position.set(0.2, -0.08, 0.33);
-        this.headMesh.add(leftBlush); this.headMesh.add(rightBlush);
-
-        this.playerBody.add(this.headMesh);
-
-        // Torso & Backpack
-        const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.75, 0.36), overallsMat);
-        torsoMesh.position.set(0, 1.0, 0);
-        torsoMesh.castShadow = true;
-        this.playerBody.add(torsoMesh);
-
-        const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0xffeb3b, flatShading: true }));
-        backpack.position.set(0, 1.0, -0.26);
-        backpack.castShadow = true;
-        this.playerBody.add(backpack);
-
-        // Arms & Axe
-        this.leftArm = new THREE.Group();
-        this.leftArm.position.set(-0.42, 1.3, 0);
-        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
-        leftArmMesh.position.set(0, -0.3, 0);
-        this.leftArm.add(leftArmMesh);
-        this.playerBody.add(this.leftArm);
-
-        this.rightArm = new THREE.Group();
-        this.rightArm.position.set(0.42, 1.3, 0);
-        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
-        rightArmMesh.position.set(0, -0.3, 0);
-        this.rightArm.add(rightArmMesh);
-
-        const axeGroup = new THREE.Group();
-        axeGroup.position.set(0, -0.65, 0.15);
-        axeGroup.rotation.x = Math.PI / 4;
-        axeGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.07), new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true })));
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.36), new THREE.MeshStandardMaterial({ color: 0xff4081, flatShading: true }));
-        blade.position.set(0, 0.3, 0.12);
-        axeGroup.add(blade);
-        this.rightArm.add(axeGroup);
-        this.playerBody.add(this.rightArm);
-
-        // Legs
-        this.leftLeg = new THREE.Group();
-        this.leftLeg.position.set(-0.16, 0.55, 0);
-        this.leftLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
-        const leftSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
-        leftSock.position.set(0, -0.32, 0);
-        this.leftLeg.add(leftSock);
-        const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
-        leftBoot.position.set(0, -0.48, 0.03);
-        this.leftLeg.add(leftBoot);
-        this.playerBody.add(this.leftLeg);
-
-        this.rightLeg = new THREE.Group();
-        this.rightLeg.position.set(0.16, 0.55, 0);
-        this.rightLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
-        const rightSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
-        rightSock.position.set(0, -0.32, 0);
-        this.rightLeg.add(rightSock);
-        const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
-        rightBoot.position.set(0, -0.48, 0.03);
-        this.rightLeg.add(rightBoot);
-        this.playerBody.add(this.rightLeg);
+    playAnimation(namePart) {
+        if (!this.mixer) return;
+        let key = Object.keys(this.animations).find(k => k.includes(namePart.toLowerCase()));
+        
+        // Fallback system: if requested animation doesn't exist
+        if (!key) {
+            if (namePart === 'idle') {
+                // If no idle, fade out to standing pose (A-pose)
+                if (this.currentAction) {
+                    this.currentAction.fadeOut(0.3);
+                    this.currentAction = null;
+                }
+                return;
+            } else {
+                // If missing walk/run, play the first available animation
+                key = Object.keys(this.animations)[0];
+            }
+        }
+        
+        if (!key) return; // No animations at all
+        
+        const action = this.animations[key];
+        if (this.currentAction === action) return;
+        
+        if (this.currentAction) {
+            this.currentAction.fadeOut(0.2);
+        }
+        action.reset().fadeIn(0.2).play();
+        this.currentAction = action;
     }
 
     update(deltaTime, inputVector, cameraYaw) {
-        const { moveX, moveZ, isRunning } = inputVector;
+        if (this.mixer) this.mixer.update(deltaTime);
+
+        const { moveX, moveZ, isRunning, isJumping } = inputVector;
         this.isRunning = isRunning;
 
         const inputLength = Math.hypot(moveX, moveZ);
         this.isMoving = inputLength > 0.08;
+
+        if (isJumping && this.position.y <= 0) {
+            this.velocityY = 10;
+        }
+
+        if (this.position.y > 0 || this.velocityY > 0) {
+            if (this.velocityY === undefined) this.velocityY = 0;
+            this.velocityY -= 30 * deltaTime; // Gravity
+            this.position.y += this.velocityY * deltaTime;
+            if (this.position.y <= 0) {
+                this.position.y = 0;
+                this.velocityY = 0;
+            }
+        }
 
         if (this.isMoving) {
             const normX = moveX / Math.max(1, inputLength);
@@ -498,22 +631,18 @@ class Player {
             while (diff > Math.PI) diff -= Math.PI * 2;
             this.rotation += diff * Math.min(1.0, deltaTime * 14);
 
-            this.walkTimer += deltaTime * (this.isRunning ? 16 : 10);
-            const legAngle = Math.sin(this.walkTimer) * 0.6;
-            this.leftLeg.rotation.x = legAngle;
-            this.rightLeg.rotation.x = -legAngle;
-            this.leftArm.rotation.x = -legAngle;
-            this.rightArm.rotation.x = legAngle;
-
-            if (this.leftPonytail && this.rightPonytail) {
-                const hairSway = Math.sin(this.walkTimer * 1.2) * 0.25;
-                this.leftPonytail.rotation.z = 0.2 + hairSway;
-                this.rightPonytail.rotation.z = -0.2 - hairSway;
+            if (this.position.y > 0) {
+                this.playAnimation('jump');
+            } else {
+                this.playAnimation(this.isRunning ? 'run' : 'walk');
             }
         } else {
             this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, 0, deltaTime * 12);
-            this.leftLeg.rotation.x = 0; this.rightLeg.rotation.x = 0;
-            this.leftArm.rotation.x = 0; this.rightArm.rotation.x = 0;
+            if (this.position.y > 0) {
+                this.playAnimation('jump');
+            } else {
+                this.playAnimation('idle');
+            }
         }
 
         this.mesh.position.copy(this.position);
@@ -526,12 +655,20 @@ KASurvival.Player = Player;
 // 9. REMOTE PLAYER (With Floating Name Tag)
 // ===================================================
 class RemotePlayer {
-    constructor(scene, name = "Friend") {
+    constructor(scene, name = "Remote") {
         this.scene = scene;
         this.name = name;
         this.position = new THREE.Vector3(0, 0, 0);
-        this.targetPosition = new THREE.Vector3(0, 0, 0);
         this.rotation = 0;
+        
+        this.isMoving = false;
+        this.isRunning = false;
+
+        this.mixer = null;
+        this.animations = {};
+        this.currentAction = null;
+
+        this.targetPosition = new THREE.Vector3(0, 0, 0);
         this.targetRotation = 0;
 
         this.mesh = new THREE.Group();
@@ -557,130 +694,67 @@ class RemotePlayer {
     }
 
     buildMesh() {
-        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe4e1, flatShading: true });
-        const hairMat = new THREE.MeshStandardMaterial({ color: 0xff80ab, flatShading: true });
-        const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xff1744, flatShading: true });
-        const eyesMat = new THREE.MeshBasicMaterial({ color: 0x2979ff });
-        const eyeHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const blushMat = new THREE.MeshBasicMaterial({ color: 0xff80ab, transparent: true, opacity: 0.7 });
-        const overallsMat = new THREE.MeshStandardMaterial({ color: 0x42a5f5, flatShading: true });
-        const sockMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
-        const shoeMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true });
+        const gender = this.gender || 'female';
+        const modelPath = gender === 'male' ? 'models/RPG_Pack/Characters/glTF/Character_Male_1.gltf' : 'models/RPG_Pack/Characters/glTF/Character_Female_1.gltf';
+        const cacheKey = 'player_' + gender;
 
-        // Head
-        this.headMesh = new THREE.Group();
-        this.headMesh.position.set(0, 1.75, 0);
+        KASurvival.modelManager.loadModel(modelPath, cacheKey, (gltf) => {
+            const clone = KASurvival.modelManager.getClone(cacheKey);
+            if (clone) {
+                clone.scale.set(1.5, 1.5, 1.5); 
+                clone.position.y = 0;
+                
+                clone.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
 
-        const headCube = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.65, 0.65), skinMat);
-        headCube.castShadow = true;
-        this.headMesh.add(headCube);
+                while(this.playerBody.children.length > 0) { 
+                    this.playerBody.remove(this.playerBody.children[0]); 
+                }
 
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.28, 0.72), hairMat);
-        hairTop.position.set(0, 0.24, 0);
-        this.headMesh.add(hairTop);
+                this.playerBody.add(clone);
 
-        const frontBangs = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.2, 0.15), hairMat);
-        frontBangs.position.set(0, 0.15, 0.32);
-        this.headMesh.add(frontBangs);
+                this.mixer = new THREE.AnimationMixer(clone);
+                const anims = KASurvival.modelManager.getAnimations(cacheKey);
+                this.animations = {};
+                anims.forEach((clip) => {
+                    this.animations[clip.name.toLowerCase()] = this.mixer.clipAction(clip);
+                });
+                
+                this.playAnimation('idle');
+            }
+        });
+    }
 
-        // Twin Tails
-        this.leftPonytail = new THREE.Group();
-        this.leftPonytail.position.set(-0.4, 0.1, -0.1);
-        const leftTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
-        leftTailMesh.position.set(-0.05, -0.22, 0);
-        leftTailMesh.castShadow = true;
-        this.leftPonytail.add(leftTailMesh);
-        this.leftPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
-        this.headMesh.add(this.leftPonytail);
-
-        this.rightPonytail = new THREE.Group();
-        this.rightPonytail.position.set(0.4, 0.1, -0.1);
-        const rightTailMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.2), hairMat);
-        rightTailMesh.position.set(-0.05, -0.22, 0);
-        rightTailMesh.castShadow = true;
-        this.rightPonytail.add(rightTailMesh);
-        this.rightPonytail.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.25), ribbonMat));
-        this.headMesh.add(this.rightPonytail);
-
-        // Eyes & Blush
-        const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
-        leftEye.position.set(-0.16, 0.02, 0.33);
-        const leftSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
-        leftSparkle.position.set(-0.14, 0.05, 0.34);
-
-        const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.04), eyesMat);
-        rightEye.position.set(0.16, 0.02, 0.33);
-        const rightSparkle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.05), eyeHighlightMat);
-        rightSparkle.position.set(0.18, 0.05, 0.34);
-
-        this.headMesh.add(leftEye); this.headMesh.add(leftSparkle);
-        this.headMesh.add(rightEye); this.headMesh.add(rightSparkle);
-
-        const leftBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
-        leftBlush.position.set(-0.2, -0.08, 0.33);
-        const rightBlush = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), blushMat);
-        rightBlush.position.set(0.2, -0.08, 0.33);
-        this.headMesh.add(leftBlush); this.headMesh.add(rightBlush);
-
-        this.playerBody.add(this.headMesh);
-
-        // Torso & Backpack
-        const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.75, 0.36), overallsMat);
-        torsoMesh.position.set(0, 1.0, 0);
-        torsoMesh.castShadow = true;
-        this.playerBody.add(torsoMesh);
-
-        const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0xffeb3b, flatShading: true }));
-        backpack.position.set(0, 1.0, -0.26);
-        backpack.castShadow = true;
-        this.playerBody.add(backpack);
-
-        // Arms & Axe
-        this.leftArm = new THREE.Group();
-        this.leftArm.position.set(-0.42, 1.3, 0);
-        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
-        leftArmMesh.position.set(0, -0.3, 0);
-        this.leftArm.add(leftArmMesh);
-        this.playerBody.add(this.leftArm);
-
-        this.rightArm = new THREE.Group();
-        this.rightArm.position.set(0.42, 1.3, 0);
-        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), skinMat);
-        rightArmMesh.position.set(0, -0.3, 0);
-        this.rightArm.add(rightArmMesh);
-
-        const axeGroup = new THREE.Group();
-        axeGroup.position.set(0, -0.65, 0.15);
-        axeGroup.rotation.x = Math.PI / 4;
-        axeGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.07), new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true })));
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.36), new THREE.MeshStandardMaterial({ color: 0xff4081, flatShading: true }));
-        blade.position.set(0, 0.3, 0.12);
-        axeGroup.add(blade);
-        this.rightArm.add(axeGroup);
-        this.playerBody.add(this.rightArm);
-
-        // Legs
-        this.leftLeg = new THREE.Group();
-        this.leftLeg.position.set(-0.16, 0.55, 0);
-        this.leftLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
-        const leftSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
-        leftSock.position.set(0, -0.32, 0);
-        this.leftLeg.add(leftSock);
-        const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
-        leftBoot.position.set(0, -0.48, 0.03);
-        this.leftLeg.add(leftBoot);
-        this.playerBody.add(this.leftLeg);
-
-        this.rightLeg = new THREE.Group();
-        this.rightLeg.position.set(0.16, 0.55, 0);
-        this.rightLeg.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), skinMat));
-        const rightSock = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.22, 0.23), sockMat);
-        rightSock.position.set(0, -0.32, 0);
-        this.rightLeg.add(rightSock);
-        const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.28), shoeMat);
-        rightBoot.position.set(0, -0.48, 0.03);
-        this.rightLeg.add(rightBoot);
-        this.playerBody.add(this.rightLeg);
+    playAnimation(namePart) {
+        if (!this.mixer) return;
+        let key = Object.keys(this.animations).find(k => k.includes(namePart.toLowerCase()));
+        
+        if (!key) {
+            if (namePart === 'idle') {
+                if (this.currentAction) {
+                    this.currentAction.fadeOut(0.3);
+                    this.currentAction = null;
+                }
+                return;
+            } else {
+                key = Object.keys(this.animations)[0];
+            }
+        }
+        
+        if (!key) return;
+        
+        const action = this.animations[key];
+        if (this.currentAction === action) return;
+        
+        if (this.currentAction) {
+            this.currentAction.fadeOut(0.2);
+        }
+        action.reset().fadeIn(0.2).play();
+        this.currentAction = action;
     }
 
     updateNetworkState(data) {
@@ -705,6 +779,10 @@ class RemotePlayer {
             if (this.leftArm) this.leftArm.rotation.x = -Math.sin(time) * 0.6;
             if (this.rightArm) this.rightArm.rotation.x = Math.sin(time) * 0.6;
             if (this.headMesh) this.headMesh.rotation.y = Math.sin(time * 0.5) * 0.1;
+            if (this.skirt) {
+                this.skirt.rotation.x = Math.sin(time) * 0.15;
+                this.skirt.rotation.z = Math.cos(time) * 0.1;
+            }
             
             // Bouncing
             this.playerBody.position.y = Math.abs(Math.sin(time * 2)) * 0.15;
@@ -745,50 +823,42 @@ class Environment {
     }
 
     buildTerrain() {
-        const groundGeo = new THREE.PlaneGeometry(KASurvival.WORLD_CONFIG.mapSize, KASurvival.WORLD_CONFIG.mapSize, 40, 40);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.8, flatShading: true });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
+        const gridSize = 20;
+        const blockSize = 2; // Assuming the block is 2x2 units
+        const offset = (gridSize * blockSize) / 2;
 
-        const gridHelper = new THREE.GridHelper(KASurvival.WORLD_CONFIG.mapSize, 100, 0x388e3c, 0x388e3c);
-        gridHelper.position.y = 0.01;
-        gridHelper.material.opacity = 0.25;
-        gridHelper.material.transparent = true;
-        this.scene.add(gridHelper);
+        KASurvival.modelManager.loadModel('models/RPG_Pack/Blocks/glTF/Block_Grass.gltf', 'block_grass', (gltf) => {
+            for (let x = 0; x < gridSize; x++) {
+                for (let z = 0; z < gridSize; z++) {
+                    const block = KASurvival.modelManager.getClone('block_grass');
+                    if (block) {
+                        block.position.set(x * blockSize - offset, -1.0, z * blockSize - offset);
+                        // Scale slightly to ensure they tile perfectly if needed, or leave at 1
+                        block.scale.set(1.0, 1.0, 1.0);
+                        
+                        block.traverse((child) => {
+                            if (child.isMesh) {
+                                child.receiveShadow = true;
+                                child.castShadow = true;
+                            }
+                        });
+                        this.scene.add(block);
+                    }
+                }
+            }
+        });
+        
+        // Add invisible walls to prevent falling off the 20x20 island
+        const wallGeo = new THREE.BoxGeometry(gridSize * blockSize, 10, 1);
+        const wallMat = new THREE.MeshBasicMaterial({ visible: false });
+        
+        const wallN = new THREE.Mesh(wallGeo, wallMat); wallN.position.set(0, 5, -offset - 0.5); this.scene.add(wallN);
+        const wallS = new THREE.Mesh(wallGeo, wallMat); wallS.position.set(0, 5, offset + 0.5); this.scene.add(wallS);
+        const wallE = new THREE.Mesh(new THREE.BoxGeometry(1, 10, gridSize * blockSize), wallMat); wallE.position.set(offset + 0.5, 5, 0); this.scene.add(wallE);
+        const wallW = new THREE.Mesh(new THREE.BoxGeometry(1, 10, gridSize * blockSize), wallMat); wallW.position.set(-offset - 0.5, 5, 0); this.scene.add(wallW);
     }
 
     buildForestAndRocks() {
-        const leafColors = [0x2e7d32, 0x388e3c, 0x43a047];
-
-        const createTree = (x, z, scale = 1) => {
-            const treeGroup = new THREE.Group();
-            treeGroup.position.set(x, 0, z);
-
-            const trunk = new THREE.Mesh(
-                new THREE.BoxGeometry(0.8 * scale, 3.5 * scale, 0.8 * scale),
-                new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9, flatShading: true })
-            );
-            trunk.position.y = (3.5 * scale) / 2;
-            trunk.castShadow = true;
-            trunk.receiveShadow = true;
-            treeGroup.add(trunk);
-
-            for (let i = 0; i < 3; i++) {
-                const size = (2.6 - i * 0.7) * scale;
-                const leaves = new THREE.Mesh(
-                    new THREE.BoxGeometry(size, 1.6 * scale, size),
-                    new THREE.MeshStandardMaterial({ color: leafColors[i], roughness: 0.7, flatShading: true })
-                );
-                leaves.position.y = 3.0 * scale + i * 1.2 * scale;
-                leaves.castShadow = true;
-                leaves.receiveShadow = true;
-                treeGroup.add(leaves);
-            }
-            return treeGroup;
-        };
-
         // Hàm tạo số ngẫu nhiên cố định (Seeded Random) để đảm bảo 2 máy mọc cây ở vị trí Y HỆT NHAU
         let seed = 12345;
         const seededRandom = () => {
@@ -796,27 +866,43 @@ class Environment {
             return x - Math.floor(x);
         };
 
-        for (let i = 0; i < KASurvival.WORLD_CONFIG.treeCount; i++) {
-            let x = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
-            let z = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 40);
-            if (Math.hypot(x, z) < KASurvival.WORLD_CONFIG.safeZoneRadius) continue;
-            this.propsGroup.add(createTree(x, z, 0.8 + seededRandom() * 0.6));
-        }
+        const islandRadius = 18; // Smaller than the 20x20 map offset
 
-        const flowerColors = [0xff4081, 0xffeb3b, 0xab47bc, 0x00e676, 0xff9100];
-        for (let i = 0; i < KASurvival.WORLD_CONFIG.flowerCount; i++) {
-            let x = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
-            let z = (seededRandom() - 0.5) * (KASurvival.WORLD_CONFIG.mapSize - 50);
-            const fGroup = new THREE.Group();
-            fGroup.position.set(x, 0, z);
-            const stem = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), new THREE.MeshBasicMaterial({ color: 0x4caf50 }));
-            stem.position.y = 0.2;
-            fGroup.add(stem);
-            const petal = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.15, 0.35), new THREE.MeshBasicMaterial({ color: flowerColors[i % flowerColors.length] }));
-            petal.position.y = 0.45;
-            fGroup.add(petal);
-            this.propsGroup.add(fGroup);
-        }
+        KASurvival.modelManager.loadModel('models/RPG_Pack/Environment/glTF/Tree_1.gltf', 'env_tree1', (gltf) => {
+            for (let i = 0; i < 20; i++) {
+                let x = (seededRandom() - 0.5) * islandRadius * 2;
+                let z = (seededRandom() - 0.5) * islandRadius * 2;
+                if (Math.hypot(x, z) < KASurvival.WORLD_CONFIG.safeZoneRadius) continue;
+                
+                const tree = KASurvival.modelManager.getClone('env_tree1');
+                if (tree) {
+                    tree.position.set(x, 0, z); // 0 to be on top of grass block which is shifted to -1
+                    const s = 1.0 + seededRandom() * 0.5;
+                    tree.scale.set(s, s, s);
+                    tree.rotation.y = seededRandom() * Math.PI * 2;
+                    tree.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }});
+                    this.propsGroup.add(tree);
+                }
+            }
+        });
+        
+        KASurvival.modelManager.loadModel('models/RPG_Pack/Environment/glTF/Tree_2.gltf', 'env_tree2', (gltf) => {
+            for (let i = 0; i < 15; i++) {
+                let x = (seededRandom() - 0.5) * islandRadius * 2;
+                let z = (seededRandom() - 0.5) * islandRadius * 2;
+                if (Math.hypot(x, z) < KASurvival.WORLD_CONFIG.safeZoneRadius) continue;
+                
+                const tree = KASurvival.modelManager.getClone('env_tree2');
+                if (tree) {
+                    tree.position.set(x, 0, z);
+                    const s = 1.0 + seededRandom() * 0.5;
+                    tree.scale.set(s, s, s);
+                    tree.rotation.y = seededRandom() * Math.PI * 2;
+                    tree.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }});
+                    this.propsGroup.add(tree);
+                }
+            }
+        });
     }
 
     buildCampfire() {
@@ -849,6 +935,129 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
+// 10.5. SKY & PARTICLE SYSTEMS (Graphics Overhaul)
+// ===================================================
+class SkySystem {
+    constructor(scene) {
+        this.scene = scene;
+        this.stars = null;
+        this.clouds = [];
+        this.buildStars();
+        this.buildClouds();
+    }
+    buildStars() {
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 1000;
+        const posArray = new Float32Array(starCount * 3);
+        for(let i = 0; i < starCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 400;
+            posArray[i+1] = 50 + Math.random() * 100; // Y
+            posArray[i+2] = (Math.random() - 0.5) * 400;
+            i += 2;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const starMat = new THREE.PointsMaterial({color: 0xffffff, size: 0.8, transparent: true, opacity: 0});
+        this.stars = new THREE.Points(starGeo, starMat);
+        this.scene.add(this.stars);
+    }
+    buildClouds() {
+        const cloudMat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.8});
+        for (let i = 0; i < 15; i++) {
+            const size = 6 + Math.random() * 8;
+            const cloud = new THREE.Mesh(new THREE.BoxGeometry(size, size*0.3, size*0.8), cloudMat);
+            cloud.position.set((Math.random() - 0.5) * 150, 35 + Math.random() * 10, (Math.random() - 0.5) * 150);
+            this.clouds.push(cloud);
+            this.scene.add(cloud);
+        }
+    }
+    update(deltaTime, isNight) {
+        if (this.stars) {
+            const targetOpacity = isNight ? 1.0 : 0;
+            this.stars.material.opacity = THREE.MathUtils.lerp(this.stars.material.opacity, targetOpacity, deltaTime * 2);
+            this.stars.rotation.y += deltaTime * 0.005;
+        }
+        this.clouds.forEach(c => {
+            c.position.x += deltaTime * 1.5;
+            if (c.position.x > 150) c.position.x = -150;
+            const targetOpacity = isNight ? 0.2 : 0.8;
+            c.material.opacity = THREE.MathUtils.lerp(c.material.opacity, targetOpacity, deltaTime * 2);
+        });
+    }
+}
+KASurvival.SkySystem = SkySystem;
+
+class ParticleSystem {
+    constructor(scene) {
+        this.scene = scene;
+        this.particles = [];
+        this.sparkGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+        this.sparkMat = new THREE.MeshBasicMaterial({color: 0xffeb3b});
+        this.fireflyMat = new THREE.MeshBasicMaterial({color: 0xccff00, transparent: true, opacity: 0.9});
+        this.heartMat = new THREE.MeshBasicMaterial({color: 0xffb6c1, transparent: true, opacity: 0.8});
+    }
+    spawnSpark(x, y, z) {
+        const p = new THREE.Mesh(this.sparkGeo, this.sparkMat);
+        p.position.set(x + (Math.random()-0.5)*0.4, y, z + (Math.random()-0.5)*0.4);
+        p.userData = { life: 1.0, vx: (Math.random()-0.5)*0.5, vy: 1.5 + Math.random(), vz: (Math.random()-0.5)*0.5, type: 'spark' };
+        this.scene.add(p);
+        this.particles.push(p);
+    }
+    spawnFirefly(x, y, z) {
+        const p = new THREE.Mesh(this.sparkGeo, this.fireflyMat);
+        p.position.set(x + (Math.random()-0.5)*20, y + Math.random()*2, z + (Math.random()-0.5)*20);
+        p.userData = { life: 3.0 + Math.random()*2, origin: p.position.clone(), time: Math.random()*100, type: 'firefly' };
+        this.scene.add(p);
+        this.particles.push(p);
+    }
+    spawnHeart(x, y, z) {
+        const p = new THREE.Mesh(this.sparkGeo, this.heartMat);
+        p.position.set(x + (Math.random()-0.5)*2, y + Math.random()*2, z + (Math.random()-0.5)*2);
+        p.userData = { life: 2.0 + Math.random(), vy: 0.5 + Math.random()*0.5, time: Math.random()*10, type: 'heart', originX: p.position.x };
+        this.scene.add(p);
+        this.particles.push(p);
+    }
+    update(deltaTime, isNight, playerPos) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            if (p.userData.type === 'spark') {
+                p.position.x += p.userData.vx * deltaTime;
+                p.position.y += p.userData.vy * deltaTime;
+                p.position.z += p.userData.vz * deltaTime;
+                p.scale.multiplyScalar(0.95);
+                p.userData.life -= deltaTime;
+            } else if (p.userData.type === 'firefly') {
+                p.userData.time += deltaTime * 2;
+                p.position.y = p.userData.origin.y + Math.sin(p.userData.time) * 0.5;
+                p.position.x = p.userData.origin.x + Math.cos(p.userData.time * 0.8) * 0.5;
+                p.userData.life -= deltaTime;
+            } else if (p.userData.type === 'heart') {
+                p.position.y += p.userData.vy * deltaTime;
+                p.userData.time += deltaTime * 5;
+                p.position.x = p.userData.originX + Math.sin(p.userData.time) * 0.2;
+                p.material.opacity = p.userData.life / 2.0;
+                p.userData.life -= deltaTime;
+            }
+            if (p.userData.life <= 0 || (!isNight && p.userData.type === 'firefly')) {
+                this.scene.remove(p);
+                this.particles.splice(i, 1);
+            }
+        }
+        
+        // Spawn logic
+        if (Math.random() < 0.3) {
+            this.spawnSpark(KASurvival.WORLD_CONFIG.campfirePosition.x, 0.5, KASurvival.WORLD_CONFIG.campfirePosition.z);
+        }
+        if (isNight && Math.random() < 0.1 && this.particles.length < 100) {
+            this.spawnFirefly(playerPos.x, 1, playerPos.z); 
+        }
+        if (Math.random() < 0.05 && this.particles.length < 150) {
+            this.spawnHeart(playerPos.x, playerPos.y, playerPos.z);
+        }
+    }
+}
+KASurvival.ParticleSystem = ParticleSystem;
+
+// ===================================================
 // 11. NETWORK MANAGER (Public WebSocket Realtime Relay)
 // ===================================================
 class NetworkManager {
@@ -856,6 +1065,11 @@ class NetworkManager {
         this.playerData = playerData;
         this.isConnected = false;
         this.isOnlineRef = null;
+    }
+
+    checkPlayerExists(playerName) {
+        // Obsolete function since we use localStorage IDs now. Just return false.
+        return Promise.resolve(false);
     }
 
     connectToWorld(playerName) {
@@ -866,24 +1080,21 @@ class NetworkManager {
 
         try {
             if (!this.db) this.db = firebase.database();
-            const safeName = playerName.replace(/[^a-zA-Z0-9]/g, '_'); // Safe node name
-            this.playerData.playerUniqueId = safeName; // Force unique ID to be the player name
+            
+            // We use the persistent ID instead of player name for the database node
+            const id = this.playerData.playerId;
 
             this.worldRef = this.db.ref('world/players');
-            this.myRef = this.worldRef.child(this.playerData.playerUniqueId);
+            this.myRef = this.worldRef.child(id);
             this.isOnlineRef = this.myRef.child('isOnline');
 
-            // Tính năng 1: Lấy dữ liệu tọa độ lưu trữ từ trước
             this.myRef.once('value').then((snapshot) => {
                 const data = snapshot.val();
                 if (data && data.x !== undefined) {
                     KASurvival.globalEventBus.emit('PLAYER_DATA_LOADED', data);
                 }
                 
-                // Đánh dấu online
                 this.isOnlineRef.set(true);
-                
-                // Tính năng 2: Chống bóng ma. Tự động set isOnline = false khi thoát web
                 this.isOnlineRef.onDisconnect().set(false);
                 
                 this.isConnected = true;
@@ -914,8 +1125,9 @@ class NetworkManager {
         if (!this.isConnected || !this.myRef) return;
 
         const payload = {
-            id: this.playerData.playerUniqueId,
+            id: this.playerData.playerId,
             name: playerName,
+            gender: this.playerData.gender || 'female',
             x: position.x, y: position.y, z: position.z,
             rotation: rotation,
             isMoving: isMoving,
@@ -924,7 +1136,6 @@ class NetworkManager {
             timestamp: Date.now()
         };
 
-        // Ghi cực nhanh lên Firebase (cơ chế Realtime)
         this.myRef.set(payload);
     }
 }
@@ -986,8 +1197,9 @@ KASurvival.CombatSystem = CombatSystem;
 // 13. LOGIN & LOBBY UI CONTROLLERS
 // ===================================================
 class LoginUI {
-    constructor(playerData, onLoginSuccess) {
+    constructor(playerData, networkManager, onLoginSuccess) {
         this.playerData = playerData;
+        this.networkManager = networkManager;
         this.onLoginSuccess = onLoginSuccess;
 
         this.loginModalEl = document.getElementById('login-modal');
@@ -1015,12 +1227,39 @@ class LoginUI {
 
     handleLogin() {
         const inputName = this.nameInputEl ? this.nameInputEl.value.trim() : '';
-        const finalName = inputName || 'Player_' + Math.floor(Math.random() * 1000);
+        if (!inputName) {
+            alert("Vui lòng nhập tên nhân vật!");
+            return;
+        }
 
-        this.playerData.setPlayerName(finalName);
+        // Get or generate persistent unique ID
+        let playerId = localStorage.getItem('ka_playerId');
+        if (!playerId) {
+            playerId = 'player_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('ka_playerId', playerId);
+        }
+
+        const gender = window.selectedGender || 'female';
+        
+        // Save gender so other parts can use it (or update PlayerData)
+        this.playerData.playerName = inputName;
+        this.playerData.playerId = playerId;
+        this.playerData.gender = gender;
+        
+        // Cập nhật Firebase ngay lập tức
+        const dbRef = firebase.database().ref(`players/${playerId}`);
+        dbRef.set({
+            name: inputName,
+            gender: gender,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+
         if (this.loginModalEl) this.loginModalEl.style.display = 'none';
-
-        if (this.onLoginSuccess) this.onLoginSuccess(finalName);
+        
+        if (this.onLoginSuccess) {
+            // Pass all data if needed, or just let app read from playerData
+            this.onLoginSuccess({ name: inputName, id: playerId, gender: gender });
+        }
     }
 }
 KASurvival.LoginUI = LoginUI;
@@ -1343,10 +1582,19 @@ class KASurvivalGame {
         this.joystick = new KASurvival.Joystick(this.inputManager);
         this.inventoryUI = new KASurvival.InventoryUI(this.playerData);
 
+        // Graphics Additions
+        this.skySystem = new KASurvival.SkySystem(this.engine.scene);
+        this.particleSystem = new KASurvival.ParticleSystem(this.engine.scene);
+
         // Login UI Controller
-        this.loginUI = new KASurvival.LoginUI(this.playerData, (playerName) => {
-            this.player.setName(playerName);
-            this.networkManager.connectToWorld(playerName);
+        this.loginUI = new KASurvival.LoginUI(this.playerData, this.networkManager, (loginData) => {
+            this.player.setName(loginData.name);
+            
+            // Set gender and reload mesh
+            this.player.gender = loginData.gender;
+            this.player.buildMesh(); // Rebuild mesh with correct gender
+            
+            this.networkManager.connectToWorld(loginData.name);
             document.getElementById('ui-overlay').style.display = 'flex';
             KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
         });
@@ -1368,6 +1616,13 @@ class KASurvivalGame {
             const id = data.id;
             if (!this.remotePlayers[id]) {
                 this.remotePlayers[id] = new KASurvival.RemotePlayer(this.engine.scene, data.name || "Friend");
+                this.remotePlayers[id].gender = data.gender || 'female';
+                this.remotePlayers[id].buildMesh();
+            } else {
+                if (this.remotePlayers[id].gender !== data.gender) {
+                    this.remotePlayers[id].gender = data.gender || 'female';
+                    this.remotePlayers[id].buildMesh();
+                }
             }
             this.remotePlayers[id].updateNetworkState(data);
         });
@@ -1411,6 +1666,9 @@ class KASurvivalGame {
         this.dayNightSystem.update(deltaTime);
         this.combatSystem.update(deltaTime);
         this.hud.update(this.player, this.playerData);
+        
+        this.skySystem.update(deltaTime, this.dayNightSystem.isNight);
+        this.particleSystem.update(deltaTime, this.dayNightSystem.isNight, this.player.position);
     }
 
     animate() {
