@@ -23,7 +23,32 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-    <!-- FIREBASE INITIALIZATION - BẠN HÃY THAY THẾ CONFIG NÀY BẰNG CỦA BẠN! -->
+    <script>
+        // TRÌNH BẮT LỖI HIỂN THỊ LÊN MÀN HÌNH (DÙNG ĐỂ TÌM LỖI FIREBASE)
+        window.onerror = function(msg, url, line) {
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'position:fixed;top:10px;left:10%;width:80%;background:red;color:white;z-index:99999;padding:15px;font-weight:bold;border-radius:8px;';
+            errDiv.innerHTML = "LỖI HỆ THỐNG: " + msg;
+            document.body.appendChild(errDiv);
+        };
+        const origConsoleError = console.error;
+        console.error = function() {
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'position:fixed;top:80px;left:10%;width:80%;background:darkred;color:yellow;z-index:99999;padding:15px;font-weight:bold;border-radius:8px;';
+            errDiv.innerHTML = "LỖI FIREBASE (ERROR): " + Array.from(arguments).join(" ");
+            document.body.appendChild(errDiv);
+            origConsoleError.apply(console, arguments);
+        };
+        const origConsoleWarn = console.warn;
+        console.warn = function() {
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'position:fixed;top:150px;left:10%;width:80%;background:orange;color:black;z-index:99999;padding:15px;font-weight:bold;border-radius:8px;';
+            errDiv.innerHTML = "CẢNH BÁO FIREBASE (WARN): " + Array.from(arguments).join(" ");
+            document.body.appendChild(errDiv);
+            origConsoleWarn.apply(console, arguments);
+        };
+    </script>
+    <!-- FIREBASE INITIALIZATION -->
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyBbX9rnJmS1T2RiRuj3Ry5IzZxwFh9Y9SA",
@@ -34,9 +59,29 @@
             appId: "1:731056008261:web:46d8d9a7bc0a97f912c72c",
             measurementId: "G-YEKS1NR0XN"
         };
-        // Add databaseURL explicitly in case Realtime DB requires it
+        // Cấu hình URL chuẩn xác mà bạn vừa tạo
         firebaseConfig.databaseURL = "https://kafev-bef0a-default-rtdb.asia-southeast1.firebasedatabase.app";
         firebase.initializeApp(firebaseConfig);
+
+        // ==========================================
+        // BÀI TEST GỬI TÍN HIỆU ĐẾN SERVER FIREBASE
+        // ==========================================
+        const testDb = firebase.database();
+        testDb.ref('server_test_ping').set({
+            time: new Date().toLocaleTimeString(),
+            status: "Thành công 100%!"
+        }).then(() => {
+            testDb.ref('server_test_ping').once('value').then(snap => {
+                const testMsg = document.createElement('div');
+                testMsg.style.cssText = 'position:fixed;top:10px;left:10%;width:80%;background:green;color:white;z-index:99999;padding:15px;font-weight:bold;border-radius:8px;text-align:center;box-shadow:0 4px 15px rgba(0,255,0,0.3);';
+                testMsg.innerHTML = "🎉 CHÚC MỪNG! TÍN HIỆU GỬI/NHẬN FIREBASE ĐÃ THÔNG SUỐT 100%!";
+                document.body.appendChild(testMsg);
+                setTimeout(() => testMsg.remove(), 5000); // Ẩn sau 5 giây
+            });
+        }).catch(err => {
+            console.error("LỖI KẾT NỐI SERVER: " + err.message);
+        });
+        // ==========================================
     </script>
 </head>
 <body>

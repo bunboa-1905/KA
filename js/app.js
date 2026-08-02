@@ -743,7 +743,17 @@ class NetworkManager {
         }
 
         try {
-            this.db = firebase.database();
+            if (!this.db) this.db = firebase.database();
+
+            // Dọn dẹp kết nối phòng cũ nếu có
+            if (this.roomRef) {
+                this.roomRef.off();
+            }
+            if (this.myRef) {
+                this.myRef.onDisconnect().cancel();
+                this.myRef.remove();
+            }
+
             this.roomRef = this.db.ref('rooms/' + this.roomName + '/players');
             this.myRef = this.roomRef.child(this.playerData.playerUniqueId);
 
