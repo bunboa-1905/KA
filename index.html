@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KA Survival - 3D Co-op RPG Survival Game</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <!-- Modular CSS Styles -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/hud.css">
+    <link rel="stylesheet" href="css/inventory.css">
+    <link rel="stylesheet" href="css/touch.css">
+
+    <!-- Three.js & PeerJS CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="three-canvas"></canvas>
+
+        <!-- Glassmorphism Controls & Status Overlay -->
+        <div id="ui-overlay">
+            <div class="hud-header">
+                <div class="game-badge">
+                    <span class="pulse-dot"></span>
+                    <span class="badge-text">KA SURVIVAL v0.3</span>
+                </div>
+                <h1 class="hud-title">KA Survival</h1>
+            </div>
+
+            <!-- Controls Info Card (PC) -->
+            <div class="controls-card glass-panel hide-on-mobile">
+                <div class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M2 12h20"/>
+                    </svg>
+                    <span>PC Controls</span>
+                </div>
+                <div class="control-grid">
+                    <div class="control-item">
+                        <div class="key-group">
+                            <div class="key-badge">W</div>
+                            <div class="key-badge">A</div>
+                            <div class="key-badge">S</div>
+                            <div class="key-badge">D</div>
+                        </div>
+                        <span>3D Movement</span>
+                    </div>
+                    <div class="control-item">
+                        <div class="key-badge wide">SHIFT</div>
+                        <span>Hold to Run</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Panel & Friend Badge -->
+            <div class="status-panel glass-panel">
+                <div class="stat-row">
+                    <span class="stat-label">Status:</span>
+                    <span id="player-state" class="stat-value active">Standing Still</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Speed:</span>
+                    <span id="player-speed" class="stat-value">0.0 m/s</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Coordinates:</span>
+                    <span id="player-pos" class="stat-value">(0.0, 0.0)</span>
+                </div>
+
+                <!-- Co-op Friend Badge -->
+                <div id="friend-status-badge" class="friend-badge" style="display: none;">
+                    <span class="friend-dot"></span>
+                    <span>Searching for Friend...</span>
+                </div>
+            </div>
+
+            <!-- Quick Inventory Hotbar -->
+            <div id="hotbar-container"></div>
+
+            <!-- Touch Controls for Mobile -->
+            <div id="joystick-zone">
+                <div id="joystick-base">
+                    <div id="joystick-stick"></div>
+                </div>
+            </div>
+
+            <div id="touch-action-zone">
+                <button id="btn-touch-run" class="touch-btn">
+                    <span class="btn-icon">🏃</span>
+                    <span class="btn-label">RUN</span>
+                </button>
+            </div>
+
+            <div id="camera-touch-hint" class="mobile-hint">
+                <span>👉 Swipe right screen to rotate 3D camera</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script Entry Point -->
+    <script src="js/app.js"></script>
+</body>
+</html>

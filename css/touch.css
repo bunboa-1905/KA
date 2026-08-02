@@ -1,0 +1,126 @@
+/* ===================================================
+   KA SURVIVAL - TOUCH JOYSTICK & MOBILE CSS STYLES
+   =================================================== */
+
+#joystick-zone {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    width: 140px;
+    height: 140px;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+}
+
+#joystick-base {
+    width: 120px;
+    height: 120px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 2px solid rgba(56, 189, 248, 0.5);
+    border-radius: 50%;
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(56, 189, 248, 0.2);
+    position: relative;
+}
+
+#joystick-stick {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.6);
+    position: absolute;
+    transition: transform 0.05s ease-out;
+}
+
+#touch-action-zone {
+    position: absolute;
+    bottom: 30px;
+    right: 24px;
+    display: flex;
+    gap: 12px;
+    pointer-events: auto;
+    z-index: 20;
+}
+
+.touch-btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 2px solid rgba(56, 189, 248, 0.6);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s, border-color 0.2s;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.touch-btn:active, .touch-btn.active {
+    transform: scale(0.92);
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+    border-color: #ffffff;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.8);
+}
+
+.btn-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.btn-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #38bdf8;
+}
+
+.touch-btn:active .btn-label, .touch-btn.active .btn-label {
+    color: #ffffff;
+}
+
+.mobile-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    color: #94a3b8;
+    pointer-events: none;
+    white-space: nowrap;
+    backdrop-filter: blur(6px);
+}
+
+@media (max-width: 768px) {
+    .hide-on-mobile {
+        display: none !important;
+    }
+    #joystick-zone {
+        bottom: 16px;
+        left: 16px;
+    }
+    #touch-action-zone {
+        bottom: 16px;
+        right: 16px;
+    }
+    #hotbar-container {
+        bottom: 85px;
+    }
+}

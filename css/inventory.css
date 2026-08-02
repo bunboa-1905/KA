@@ -1,0 +1,63 @@
+/* ===================================================
+   KA SURVIVAL - INVENTORY & QUICK HOTBAR CSS STYLES
+   =================================================== */
+
+#hotbar-container {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    pointer-events: auto;
+    z-index: 15;
+}
+
+.hotbar-slot {
+    width: 48px;
+    height: 48px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.hotbar-slot:hover, .hotbar-slot.active {
+    border-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.2);
+    transform: scale(1.05);
+}
+
+.slot-key {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 9px;
+    color: #94a3b8;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.slot-icon {
+    font-size: 22px;
+}
+
+.slot-count {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    font-family: monospace;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
