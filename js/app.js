@@ -1,7 +1,7 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * All classes, data schemas, and entities defined under KASurvival namespace
- * Compatible with file:// protocol, GitHub Pages, Netlify & local servers
+ * Includes Login System, Character Name Tag Rendering, and 2-Player Co-op
+ * Engine: Three.js
  */
 
 window.KASurvival = window.KASurvival || {};
@@ -32,7 +32,7 @@ KASurvival.globalEventBus = new EventBus();
 // 2. GAME STATE MANAGER
 // ===================================================
 KASurvival.GAME_STATES = {
-    LOADING: 'LOADING',
+    LOGIN: 'LOGIN',
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER'
@@ -40,7 +40,7 @@ KASurvival.GAME_STATES = {
 
 class GameStateManager {
     constructor() {
-        this.currentState = KASurvival.GAME_STATES.LOADING;
+        this.currentState = KASurvival.GAME_STATES.LOGIN;
     }
     setState(newState) {
         this.currentState = newState;
@@ -48,11 +48,14 @@ class GameStateManager {
     getState() {
         return this.currentState;
     }
+    isPlaying() {
+        return this.currentState === KASurvival.GAME_STATES.PLAYING;
+    }
 }
 KASurvival.gameStateManager = new GameStateManager();
 
 // ===================================================
-// 3. INPUT MANAGER (PC Keyboard/Mouse & Mobile Touch)
+// 3. INPUT MANAGER
 // ===================================================
 class InputManager {
     constructor() {
@@ -219,14 +222,13 @@ class Engine {
 KASurvival.Engine = Engine;
 
 // ===================================================
-// 6. DATA LAYER (Items, Player, World Config)
+// 6. DATA LAYER (Items, PlayerData with Name Storage)
 // ===================================================
 KASurvival.ITEMS = {
-    WOOD: { id: 'wood', name: 'Wood', icon: '🪵', stackable: true, maxStack: 64 },
-    STONE: { id: 'stone', name: 'Stone', icon: '🪨', stackable: true, maxStack: 64 },
-    BERRY: { id: 'berry', name: 'Berry', icon: '🫐', stackable: true, maxStack: 32 },
-    AXE: { id: 'axe', name: 'Wood Axe', icon: '🪓', stackable: false },
-    PICKAXE: { id: 'pickaxe', name: 'Wood Pickaxe', icon: '⛏️', stackable: false }
+    WOOD: { id: 'wood', name: 'Wood', icon: '🪵', stackable: true },
+    STONE: { id: 'stone', name: 'Stone', icon: '🪨', stackable: true },
+    BERRY: { id: 'berry', name: 'Berry', icon: '🫐', stackable: true },
+    AXE: { id: 'axe', name: 'Wood Axe', icon: '🪓', stackable: false }
 };
 
 KASurvival.WORLD_CONFIG = {
@@ -242,6 +244,7 @@ KASurvival.WORLD_CONFIG = {
 class PlayerData {
     constructor() {
         this.playerUniqueId = this.loadOrGenerateUniqueId();
+        this.playerName = localStorage.getItem('ka_player_name') || '';
         this.friendLastKnownId = localStorage.getItem('ka_friend_id') || null;
 
         this.stats = { health: 100, maxHealth: 100, hunger: 100, maxHunger: 100 };
@@ -263,6 +266,11 @@ class PlayerData {
         return savedId;
     }
 
+    setPlayerName(name) {
+        this.playerName = name || 'Player';
+        localStorage.setItem('ka_player_name', this.playerName);
+    }
+
     setFriendId(friendId) {
         this.friendLastKnownId = friendId;
         localStorage.setItem('ka_friend_id', friendId);
@@ -271,11 +279,43 @@ class PlayerData {
 KASurvival.PlayerData = PlayerData;
 
 // ===================================================
-// 7. PLAYER ENTITY (3D Mesh & Animations)
+// 7. HELPER: TEXT SPRITE GENERATOR FOR NAME TAGS
+// ===================================================
+function createNameTagSprite(text, colorHex = '#ffffff') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.beginPath();
+    ctx.roundRect(10, 10, 236, 44, 20);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.font = 'bold 22px Outfit, sans-serif';
+    ctx.fillStyle = colorHex;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(3, 0.75, 1);
+    return sprite;
+}
+
+// ===================================================
+// 8. LOCAL PLAYER ENTITY (With Floating Name Tag)
 // ===================================================
 class Player {
-    constructor(scene) {
+    constructor(scene, name = "Player") {
         this.scene = scene;
+        this.name = name;
+
         this.position = new THREE.Vector3(0, 0, 0);
         this.rotation = 0;
         this.targetRotation = 0;
@@ -292,7 +332,20 @@ class Player {
         this.mesh.add(this.playerBody);
 
         this.buildMesh();
+
+        this.nameTag = createNameTagSprite(this.name, '#38bdf8');
+        this.nameTag.position.set(0, 2.6, 0);
+        this.mesh.add(this.nameTag);
+
         this.scene.add(this.mesh);
+    }
+
+    setName(newName) {
+        this.name = newName;
+        if (this.nameTag) this.mesh.remove(this.nameTag);
+        this.nameTag = createNameTagSprite(this.name, '#38bdf8');
+        this.nameTag.position.set(0, 2.6, 0);
+        this.mesh.add(this.nameTag);
     }
 
     buildMesh() {
@@ -477,7 +530,7 @@ class Player {
 KASurvival.Player = Player;
 
 // ===================================================
-// 8. REMOTE PLAYER (Co-op Friend 3D Mesh)
+// 9. REMOTE PLAYER (With Floating Name Tag)
 // ===================================================
 class RemotePlayer {
     constructor(scene, name = "Friend") {
@@ -490,7 +543,21 @@ class RemotePlayer {
 
         this.mesh = new THREE.Group();
         this.buildMesh();
+
+        this.nameTag = createNameTagSprite(this.name, '#34d399');
+        this.nameTag.position.set(0, 2.6, 0);
+        this.mesh.add(this.nameTag);
+
         this.scene.add(this.mesh);
+    }
+
+    setName(newName) {
+        if (!newName || newName === this.name) return;
+        this.name = newName;
+        if (this.nameTag) this.mesh.remove(this.nameTag);
+        this.nameTag = createNameTagSprite(this.name, '#34d399');
+        this.nameTag.position.set(0, 2.6, 0);
+        this.mesh.add(this.nameTag);
     }
 
     buildMesh() {
@@ -524,6 +591,9 @@ class RemotePlayer {
         if (data.rotation !== undefined) {
             this.targetRotation = data.rotation;
         }
+        if (data.name) {
+            this.setName(data.name);
+        }
     }
 
     update(deltaTime) {
@@ -540,7 +610,7 @@ class RemotePlayer {
 KASurvival.RemotePlayer = RemotePlayer;
 
 // ===================================================
-// 9. ENVIRONMENT ENTITY
+// 10. ENVIRONMENT ENTITY
 // ===================================================
 class Environment {
     constructor(scene) {
@@ -651,7 +721,7 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 10. NETWORK MANAGER (PeerJS WebRTC Auto-Join)
+// 11. NETWORK MANAGER (PeerJS + Player Name Broadcast)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
@@ -660,6 +730,7 @@ class NetworkManager {
         this.connection = null;
         this.isHost = false;
         this.isConnected = false;
+        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_signal_2026_room';
 
         this.initPeer();
     }
@@ -671,7 +742,7 @@ class NetworkManager {
         this.peer = new Peer(myId);
 
         this.peer.on('open', (id) => {
-            this.checkUrlHashAndConnect();
+            this.registerAndAutoPair();
         });
 
         this.peer.on('connection', (conn) => {
@@ -683,20 +754,46 @@ class NetworkManager {
         });
     }
 
-    checkUrlHashAndConnect() {
+    registerAndAutoPair() {
         const hash = window.location.hash;
         if (hash.includes('#room=')) {
             const targetPeerId = hash.split('#room=')[1];
             if (targetPeerId && targetPeerId !== this.playerData.playerUniqueId) {
                 this.connectToPeer(targetPeerId);
+                return;
             }
-        } else {
-            window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
         }
+        this.publishMyPeerId();
+        this.listenForPeerSignal();
+    }
+
+    publishMyPeerId() {
+        fetch(this.signalTopicUrl, {
+            method: 'POST',
+            body: this.playerData.playerUniqueId
+        }).catch(() => {});
+        window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
+    }
+
+    listenForPeerSignal() {
+        if (typeof EventSource === 'undefined') return;
+
+        const eventSource = new EventSource(`${this.signalTopicUrl}/sse`);
+        eventSource.onmessage = (event) => {
+            if (this.isConnected) return;
+            try {
+                const data = JSON.parse(event.data);
+                const receivedPeerId = data.message ? data.message.trim() : '';
+
+                if (receivedPeerId && receivedPeerId !== this.playerData.playerUniqueId) {
+                    this.connectToPeer(receivedPeerId);
+                }
+            } catch (e) {}
+        };
     }
 
     connectToPeer(targetPeerId) {
-        if (!this.peer) return;
+        if (!this.peer || this.isConnected) return;
         this.connection = this.peer.connect(targetPeerId);
         this.isHost = false;
 
@@ -723,21 +820,22 @@ class NetworkManager {
         });
     }
 
-    broadcastPlayerState(position, rotation, isMoving, isRunning) {
+    broadcastPlayerState(position, rotation, isMoving, isRunning, playerName) {
         if (!this.isConnected || !this.connection) return;
         this.connection.send({
             type: 'PLAYER_STATE',
             x: position.x, y: position.y, z: position.z,
             rotation: rotation,
             isMoving: isMoving,
-            isRunning: isRunning
+            isRunning: isRunning,
+            name: playerName
         });
     }
 }
 KASurvival.NetworkManager = NetworkManager;
 
 // ===================================================
-// 11. DAY/NIGHT SYSTEM & COMBAT SYSTEM
+// 12. DAY/NIGHT SYSTEM & COMBAT SYSTEM
 // ===================================================
 class DayNightSystem {
     constructor(engine) {
@@ -789,11 +887,12 @@ class CombatSystem {
 KASurvival.CombatSystem = CombatSystem;
 
 // ===================================================
-// 12. HUD & JOYSTICK UI RENDERERS
+// 13. HUD & LOGIN UI CONTROLLER
 // ===================================================
 class HUD {
     constructor(playerData) {
         this.playerData = playerData;
+        this.nameDisplayEl = document.getElementById('player-display-name');
         this.stateEl = document.getElementById('player-state');
         this.speedEl = document.getElementById('player-speed');
         this.posEl = document.getElementById('player-pos');
@@ -817,7 +916,10 @@ class HUD {
         });
     }
 
-    update(player) {
+    update(player, playerData) {
+        if (this.nameDisplayEl) {
+            this.nameDisplayEl.textContent = playerData.playerName || 'Player';
+        }
         if (this.stateEl) {
             if (player.isMoving) {
                 this.stateEl.textContent = player.isRunning ? '🏃 Running Fast' : '🚶 Moving';
@@ -832,6 +934,49 @@ class HUD {
     }
 }
 KASurvival.HUD = HUD;
+
+class LoginUI {
+    constructor(playerData, onLoginSuccess) {
+        this.playerData = playerData;
+        this.onLoginSuccess = onLoginSuccess;
+
+        this.modalEl = document.getElementById('login-modal');
+        this.uiOverlayEl = document.getElementById('ui-overlay');
+        this.nameInputEl = document.getElementById('player-name-input');
+        this.startBtnEl = document.getElementById('btn-login-start');
+
+        this.init();
+    }
+
+    init() {
+        if (this.playerData.playerName && this.nameInputEl) {
+            this.nameInputEl.value = this.playerData.playerName;
+        }
+
+        if (this.startBtnEl) {
+            this.startBtnEl.addEventListener('click', () => this.handleLogin());
+        }
+
+        if (this.nameInputEl) {
+            this.nameInputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.handleLogin();
+            });
+        }
+    }
+
+    handleLogin() {
+        const inputName = this.nameInputEl ? this.nameInputEl.value.trim() : '';
+        const finalName = inputName || 'Player_' + Math.floor(Math.random() * 1000);
+
+        this.playerData.setPlayerName(finalName);
+
+        if (this.modalEl) this.modalEl.style.display = 'none';
+        if (this.uiOverlayEl) this.uiOverlayEl.style.display = 'flex';
+
+        if (this.onLoginSuccess) this.onLoginSuccess(finalName);
+    }
+}
+KASurvival.LoginUI = LoginUI;
 
 class Joystick {
     constructor(inputManager) {
@@ -966,7 +1111,7 @@ class InventoryUI {
 KASurvival.InventoryUI = InventoryUI;
 
 // ===================================================
-// 13. MAIN APPLICATION GAME BOOTSTRAP
+// 14. MAIN APPLICATION GAME BOOTSTRAP
 // ===================================================
 class KASurvivalGame {
     constructor() {
@@ -975,7 +1120,7 @@ class KASurvivalGame {
         this.playerData = new KASurvival.PlayerData();
 
         this.environment = new KASurvival.Environment(this.engine.scene);
-        this.player = new KASurvival.Player(this.engine.scene);
+        this.player = new KASurvival.Player(this.engine.scene, this.playerData.playerName || "Player");
         this.remotePlayer = null;
 
         this.networkManager = new KASurvival.NetworkManager(this.playerData);
@@ -985,6 +1130,12 @@ class KASurvivalGame {
         this.hud = new KASurvival.HUD(this.playerData);
         this.joystick = new KASurvival.Joystick(this.inputManager);
         this.inventoryUI = new KASurvival.InventoryUI(this.playerData);
+
+        // Login UI Controller
+        this.loginUI = new KASurvival.LoginUI(this.playerData, (playerName) => {
+            this.player.setName(playerName);
+            KASurvival.gameStateManager.setState(KASurvival.GAME_STATES.PLAYING);
+        });
 
         this.setupNetworkEvents();
         this.animate();
@@ -1012,6 +1163,10 @@ class KASurvivalGame {
     }
 
     update(deltaTime) {
+        if (!KASurvival.gameStateManager.isPlaying() && KASurvival.gameStateManager.getState() !== KASurvival.GAME_STATES.LOADING) {
+            return;
+        }
+
         const movementVector = this.inputManager.getMovementVector();
         this.player.update(deltaTime, movementVector, this.inputManager.cameraYaw);
 
@@ -1031,12 +1186,13 @@ class KASurvivalGame {
             this.player.position,
             this.player.rotation,
             this.player.isMoving,
-            this.player.isRunning
+            this.player.isRunning,
+            this.playerData.playerName
         );
 
         this.dayNightSystem.update(deltaTime);
         this.combatSystem.update(deltaTime);
-        this.hud.update(this.player);
+        this.hud.update(this.player, this.playerData);
     }
 
     animate() {

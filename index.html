@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -9,8 +8,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Press+Start+2P&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
 
     <!-- Modular CSS Styles -->
     <link rel="stylesheet" href="css/main.css">
@@ -22,17 +20,36 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
-
 <body>
     <div id="game-container">
         <canvas id="three-canvas"></canvas>
 
+        <!-- LOGIN MODAL OVERLAY -->
+        <div id="login-modal" class="login-overlay">
+            <div class="login-card glass-panel">
+                <div class="game-badge" style="margin: 0 auto 12px auto;">
+                    <span class="pulse-dot"></span>
+                    <span class="badge-text">KA SURVIVAL v0.4</span>
+                </div>
+                <h1 class="login-title">PLAYER LOGIN</h1>
+                <p class="login-subtitle">Enter your character name to enter the 3D world</p>
+
+                <div class="input-group">
+                    <input type="text" id="player-name-input" class="login-input" placeholder="Enter Character Name..." maxlength="15" autocomplete="off">
+                </div>
+
+                <button id="btn-login-start" class="login-btn">
+                    <span>🚀 START SURVIVAL</span>
+                </button>
+            </div>
+        </div>
+
         <!-- Glassmorphism Controls & Status Overlay -->
-        <div id="ui-overlay">
+        <div id="ui-overlay" style="display: none;">
             <div class="hud-header">
                 <div class="game-badge">
                     <span class="pulse-dot"></span>
-                    <span class="badge-text">KA SURVIVAL v0.3</span>
+                    <span class="badge-text">KA SURVIVAL v0.4</span>
                 </div>
                 <h1 class="hud-title">KA Survival</h1>
             </div>
@@ -41,7 +58,7 @@
             <div class="controls-card glass-panel hide-on-mobile">
                 <div class="card-title">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2v20M2 12h20" />
+                        <path d="M12 2v20M2 12h20"/>
                     </svg>
                     <span>PC Controls</span>
                 </div>
@@ -64,6 +81,10 @@
 
             <!-- Status Panel & Friend Badge -->
             <div class="status-panel glass-panel">
+                <div class="stat-row">
+                    <span class="stat-label">Player:</span>
+                    <span id="player-display-name" class="stat-value active">Player</span>
+                </div>
                 <div class="stat-row">
                     <span class="stat-label">Status:</span>
                     <span id="player-state" class="stat-value active">Standing Still</span>
@@ -110,5 +131,4 @@
     <!-- Application Script Entry Point -->
     <script src="js/app.js"></script>
 </body>
-
 </html>
