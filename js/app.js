@@ -1082,7 +1082,7 @@ class NetworkManager {
             if (!this.db) this.db = firebase.database();
             
             // We use the persistent ID instead of player name for the database node
-            const id = this.playerData.playerId;
+            const id = this.playerData.playerUniqueId;
 
             this.worldRef = this.db.ref('world/players');
             this.myRef = this.worldRef.child(id);
@@ -1125,7 +1125,7 @@ class NetworkManager {
         if (!this.isConnected || !this.myRef) return;
 
         const payload = {
-            id: this.playerData.playerId,
+            id: this.playerData.playerUniqueId,
             name: playerName,
             gender: this.playerData.gender || 'female',
             x: position.x, y: position.y, z: position.z,
