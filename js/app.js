@@ -720,88 +720,74 @@ KASurvival.Environment = Environment;
 class NetworkManager {
     constructor(playerData) {
         this.playerData = playerData;
-        this.client = null;
         this.roomName = '8899';
-        this.topic = 'ka_survival_v2/room_8899';
         this.isConnected = false;
-        this.knownFriends = new Set();
-
-        this.connectWebSocket();
+        
+        // Wait for Firebase to initialize from index.html dummy config
+        setTimeout(() => this.connectFirebase(), 1000);
     }
 
     setRoomName(newRoomName) {
         if (!newRoomName) return;
         this.roomName = newRoomName.trim().toUpperCase();
-        this.topic = `ka_survival_v2/room_${this.roomName.toLowerCase()}`;
         window.history.replaceState(null, null, `#room=${this.roomName}`);
         KASurvival.globalEventBus.emit('ROOM_CODE_ASSIGNED', this.roomName);
 
-        if (this.client && this.isConnected) {
-            this.client.subscribe(this.topic);
+        this.connectFirebase();
+    }
+
+    connectFirebase() {
+        if (typeof firebase === 'undefined' || !firebase.apps.length) {
+            console.error("Firebase chưa được cấu hình. Vui lòng cập nhật firebaseConfig trong index.html");
+            return;
+        }
+
+        try {
+            this.db = firebase.database();
+            this.roomRef = this.db.ref('rooms/' + this.roomName + '/players');
+            this.myRef = this.roomRef.child(this.playerData.playerUniqueId);
+
+            // Tự động xóa khỏi DB khi đóng trình duyệt
+            this.myRef.onDisconnect().remove();
+
+            this.isConnected = true;
+
+            // Broadcast ngay khi join để báo cho người khác
             this.broadcastPlayerState({ x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName);
+
+            // Lắng nghe 60fps từ tất cả người chơi khác trong phòng
+            this.roomRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                for (const [playerId, pData] of Object.entries(data)) {
+                    if (playerId !== this.playerData.playerUniqueId) {
+                        KASurvival.globalEventBus.emit('LOBBY_FRIEND_JOINED', pData.name);
+                        KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: pData.name });
+                        KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', pData);
+                    }
+                }
+            });
+        } catch(e) {
+            console.error("Lỗi kết nối Firebase:", e);
         }
     }
 
-    connectWebSocket() {
-        if (typeof mqtt === 'undefined') return;
-
-        const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
-        const clientId = 'ka_player_' + Math.random().toString(36).substr(2, 8);
-
-        this.client = mqtt.connect(brokerUrl, {
-            clientId: clientId,
-            clean: true,
-            connectTimeout: 4000,
-            reconnectPeriod: 2000
-        });
-
-        this.client.on('connect', () => {
-            this.isConnected = true;
-            this.client.subscribe(this.topic, () => {
-                this.broadcastPlayerState({ x: 0, y: 0, z: 0 }, 0, false, false, this.playerData.playerName);
-            });
-        });
-
-        this.client.on('message', (topic, message) => {
-            try {
-                const data = JSON.parse(message.toString());
-                if (data && data.senderId !== this.playerData.playerUniqueId) {
-                    
-                    // 2-Way Handshake: If we haven't seen this friend yet, reply immediately so they see us!
-                    if (!this.knownFriends.has(data.senderId)) {
-                        this.knownFriends.add(data.senderId);
-                        
-                        let px = 0, py = 0, pz = 0, rot = 0;
-                        if (window.game && window.game.player) {
-                            px = window.game.player.position.x;
-                            py = window.game.player.position.y;
-                            pz = window.game.player.position.z;
-                            rot = window.game.player.rotation;
-                        }
-                        this.broadcastPlayerState({ x: px, y: py, z: pz }, rot, false, false, this.playerData.playerName);
-                    }
-
-                    KASurvival.globalEventBus.emit('LOBBY_FRIEND_JOINED', data.name);
-                    KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: data.name });
-                    KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
-                }
-            } catch (e) {}
-        });
-    }
-
     broadcastPlayerState(position, rotation, isMoving, isRunning, playerName) {
-        if (!this.isConnected || !this.client) return;
+        if (!this.isConnected || !this.myRef) return;
 
-        const payload = JSON.stringify({
+        const payload = {
             senderId: this.playerData.playerUniqueId,
             name: playerName || this.playerData.playerName || 'Friend',
             x: position.x, y: position.y, z: position.z,
             rotation: rotation,
             isMoving: isMoving,
-            isRunning: isRunning
-        });
+            isRunning: isRunning,
+            timestamp: Date.now()
+        };
 
-        this.client.publish(this.topic, payload);
+        // Ghi cực nhanh lên Firebase (cơ chế Realtime)
+        this.myRef.set(payload);
     }
 }
 KASurvival.NetworkManager = NetworkManager;

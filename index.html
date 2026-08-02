@@ -16,9 +16,28 @@
     <link rel="stylesheet" href="css/inventory.css">
     <link rel="stylesheet" href="css/touch.css">
 
-    <!-- Three.js & MQTT WebSocket CDNs -->
+    <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+
+    <!-- Firebase App & Database (Compat V10) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+    <!-- FIREBASE INITIALIZATION - BẠN HÃY THAY THẾ CONFIG NÀY BẰNG CỦA BẠN! -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbX9rnJmS1T2RiRuj3Ry5IzZxwFh9Y9SA",
+            authDomain: "kafev-bef0a.firebaseapp.com",
+            projectId: "kafev-bef0a",
+            storageBucket: "kafev-bef0a.firebasestorage.app",
+            messagingSenderId: "731056008261",
+            appId: "1:731056008261:web:46d8d9a7bc0a97f912c72c",
+            measurementId: "G-YEKS1NR0XN"
+        };
+        // Add databaseURL explicitly in case Realtime DB requires it
+        firebaseConfig.databaseURL = "https://kafev-bef0a-default-rtdb.asia-southeast1.firebasedatabase.app";
+        firebase.initializeApp(firebaseConfig);
+    </script>
 </head>
 <body>
     <div id="game-container">
