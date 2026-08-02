@@ -8,7 +8,6 @@
     padding: 0;
     user-select: none;
     -webkit-user-select: none;
-    touch-action: none;
 }
 
 body, html {
@@ -93,6 +92,7 @@ body, html {
     transition: border-color 0.2s, box-shadow 0.2s;
     user-select: text;
     -webkit-user-select: text;
+    pointer-events: auto !important;
 }
 
 .login-input:focus {
@@ -114,6 +114,13 @@ body, html {
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
     transition: transform 0.1s, box-shadow 0.2s;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 10;
+}
+
+.login-btn * {
+    pointer-events: none !important;
 }
 
 .login-btn.secondary {
