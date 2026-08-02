@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Features: Login System, 5s Heartbeat Auto-Pairing, Copy Invite Link & 2-Player Co-op
+ * Features: Google STUN ICE Servers, PeerJS HTTPS 443, Login System, 2-Player Co-op
  * Engine: Three.js
  */
 
@@ -355,7 +355,6 @@ class Player {
         const eyesMat = new THREE.MeshBasicMaterial({ color: 0x2979ff });
         const eyeHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const blushMat = new THREE.MeshBasicMaterial({ color: 0xff80ab, transparent: true, opacity: 0.7 });
-        const shirtMat = new THREE.MeshStandardMaterial({ color: 0xffcdd2, flatShading: true });
         const overallsMat = new THREE.MeshStandardMaterial({ color: 0x42a5f5, flatShading: true });
         const sockMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
         const shoeMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, flatShading: true });
@@ -721,7 +720,7 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (5s Heartbeat Auto-Pairing Relay)
+// 11. NETWORK MANAGER (Google STUN + HTTPS 443 + PeerJS)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
@@ -730,7 +729,7 @@ class NetworkManager {
         this.connection = null;
         this.isHost = false;
         this.isConnected = false;
-        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v2';
+        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v3';
         this.heartbeatTimer = null;
 
         this.initPeer();
@@ -740,9 +739,22 @@ class NetworkManager {
         if (typeof Peer === 'undefined') return;
 
         const myId = this.playerData.playerUniqueId;
-        this.peer = new Peer(myId);
+
+        // Configure Google STUN ICE Servers & Secure HTTPS 443
+        this.peer = new Peer(myId, {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
+            }
+        });
 
         this.peer.on('open', (id) => {
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `My ID: ${id} (Waiting...)`, status: 'waiting' });
             this.registerAndAutoPair();
         });
 
@@ -752,6 +764,10 @@ class NetworkManager {
             this.isConnected = true;
             this.setupConnectionListeners();
             KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: true });
+        });
+
+        this.peer.on('error', (err) => {
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Network Error: Retrying...`, status: 'error' });
         });
     }
 
@@ -772,7 +788,7 @@ class NetworkManager {
         // 3. Poll active host signal from ntfy.sh
         this.fetchActiveHostAndConnect();
 
-        // 4. Start 4-second heartbeat signaling
+        // 4. Start 3-second heartbeat signaling
         this.startHeartbeatSignal();
 
         // 5. Listen to SSE live stream for incoming friends
@@ -808,7 +824,7 @@ class NetworkManager {
         };
 
         sendSignal();
-        this.heartbeatTimer = setInterval(sendSignal, 4000);
+        this.heartbeatTimer = setInterval(sendSignal, 3000);
     }
 
     listenForPeerSignal() {
@@ -830,7 +846,8 @@ class NetworkManager {
 
     connectToPeer(targetPeerId) {
         if (!this.peer || this.isConnected) return;
-        this.connection = this.peer.connect(targetPeerId);
+        KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connecting to ${targetPeerId}...`, status: 'connecting' });
+        this.connection = this.peer.connect(targetPeerId, { reliable: true });
         this.isHost = false;
 
         this.connection.on('open', () => {
@@ -838,6 +855,10 @@ class NetworkManager {
             this.playerData.setFriendId(targetPeerId);
             this.setupConnectionListeners();
             KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false });
+        });
+
+        this.connection.on('error', () => {
+            KASurvival.globalEventBus.emit('NETWORK_STATUS', { text: `Connection retry...`, status: 'error' });
         });
     }
 
@@ -933,24 +954,41 @@ class HUD {
         this.speedEl = document.getElementById('player-speed');
         this.posEl = document.getElementById('player-pos');
         this.btnCopyInvite = document.getElementById('btn-copy-invite');
+        this.friendDotEl = document.querySelector('.friend-dot');
+        this.statusTextEl = document.getElementById('friend-status-text');
 
         this.setupEventBus();
         this.setupCopyInviteButton();
     }
 
     setupEventBus() {
-        KASurvival.globalEventBus.on('FRIEND_CONNECTED', (data) => {
-            const badge = document.getElementById('friend-status-badge');
-            const statusText = document.getElementById('friend-status-text');
-            if (badge) badge.style.display = 'flex';
-            if (statusText) {
-                statusText.innerHTML = `<b style="color:#10b981;">Friend Connected (${data.isHost ? 'Client' : 'Host'})</b>`;
+        KASurvival.globalEventBus.on('NETWORK_STATUS', (data) => {
+            if (this.statusTextEl) this.statusTextEl.textContent = data.text;
+            if (this.friendDotEl) {
+                this.friendDotEl.className = 'friend-dot';
+                if (data.status === 'connecting') this.friendDotEl.style.backgroundColor = '#60a5fa';
+                else if (data.status === 'error') this.friendDotEl.style.backgroundColor = '#ef4444';
+                else this.friendDotEl.style.backgroundColor = '#fbbf24';
             }
         });
+
+        KASurvival.globalEventBus.on('FRIEND_CONNECTED', (data) => {
+            const badge = document.getElementById('friend-status-badge');
+            if (badge) badge.style.display = 'flex';
+            if (this.statusTextEl) {
+                this.statusTextEl.innerHTML = `<b style="color:#10b981;">Friend Connected (${data.isHost ? 'Client' : 'Host'})</b>`;
+            }
+            if (this.friendDotEl) {
+                this.friendDotEl.className = 'friend-dot online';
+            }
+        });
+
         KASurvival.globalEventBus.on('FRIEND_DISCONNECTED', () => {
-            const statusText = document.getElementById('friend-status-text');
-            if (statusText) {
-                statusText.textContent = 'Friend Disconnected';
+            if (this.statusTextEl) {
+                this.statusTextEl.textContent = 'Friend Disconnected';
+            }
+            if (this.friendDotEl) {
+                this.friendDotEl.className = 'friend-dot';
             }
         });
     }
