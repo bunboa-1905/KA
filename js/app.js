@@ -502,7 +502,7 @@ class Player {
         this.buildMesh();
 
         this.nameTag = createNameTagSprite(this.name, '#38bdf8');
-        this.nameTag.position.set(0, 2.6, 0);
+        this.nameTag.position.set(0, 4.2, 0);
         this.mesh.add(this.nameTag);
 
         this.scene.add(this.mesh);
@@ -512,7 +512,7 @@ class Player {
         this.name = newName;
         if (this.nameTag) this.mesh.remove(this.nameTag);
         this.nameTag = createNameTagSprite(this.name, '#38bdf8');
-        this.nameTag.position.set(0, 2.6, 0);
+        this.nameTag.position.set(0, 4.2, 0);
         this.mesh.add(this.nameTag);
     }
 
@@ -678,7 +678,7 @@ class RemotePlayer {
         this.buildMesh();
 
         this.nameTag = createNameTagSprite(this.name, '#34d399');
-        this.nameTag.position.set(0, 2.6, 0);
+        this.nameTag.position.set(0, 4.2, 0);
         this.mesh.add(this.nameTag);
 
         this.scene.add(this.mesh);
@@ -689,7 +689,7 @@ class RemotePlayer {
         this.name = newName;
         if (this.nameTag) this.mesh.remove(this.nameTag);
         this.nameTag = createNameTagSprite(this.name, '#34d399');
-        this.nameTag.position.set(0, 2.6, 0);
+        this.nameTag.position.set(0, 4.2, 0);
         this.mesh.add(this.nameTag);
     }
 
@@ -767,33 +767,30 @@ class RemotePlayer {
         if (data.name) {
             this.setName(data.name);
         }
+        if (data.isRunning !== undefined) {
+            this.isRunning = data.isRunning;
+        }
+        if (data.isMoving !== undefined) {
+            this.isMoving = data.isMoving;
+        }
     }
 
     update(deltaTime) {
-        // Animation
+        if (this.mixer) this.mixer.update(deltaTime);
+
         const distanceToTarget = this.position.distanceTo(this.targetPosition);
-        if (distanceToTarget > 0.05) {
-            const time = Date.now() * 0.012; // Fast run anim
-            if (this.leftLeg) this.leftLeg.rotation.x = Math.sin(time) * 0.6;
-            if (this.rightLeg) this.rightLeg.rotation.x = -Math.sin(time) * 0.6;
-            if (this.leftArm) this.leftArm.rotation.x = -Math.sin(time) * 0.6;
-            if (this.rightArm) this.rightArm.rotation.x = Math.sin(time) * 0.6;
-            if (this.headMesh) this.headMesh.rotation.y = Math.sin(time * 0.5) * 0.1;
-            if (this.skirt) {
-                this.skirt.rotation.x = Math.sin(time) * 0.15;
-                this.skirt.rotation.z = Math.cos(time) * 0.1;
+        if (distanceToTarget > 0.05 || this.isMoving) {
+            if (this.targetPosition.y > 0) {
+                this.playAnimation('jump');
+            } else {
+                this.playAnimation(this.isRunning ? 'run' : 'walk');
             }
-            
-            // Bouncing
-            this.playerBody.position.y = Math.abs(Math.sin(time * 2)) * 0.15;
         } else {
-            // Idle
-            if (this.leftLeg) this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, deltaTime * 10);
-            if (this.rightLeg) this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, deltaTime * 10);
-            if (this.leftArm) this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, deltaTime * 10);
-            if (this.rightArm) this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, deltaTime * 10);
-            if (this.headMesh) this.headMesh.rotation.y = THREE.MathUtils.lerp(this.headMesh.rotation.y, 0, deltaTime * 10);
-            this.playerBody.position.y = THREE.MathUtils.lerp(this.playerBody.position.y, 0, deltaTime * 10);
+            if (this.targetPosition.y > 0) {
+                this.playAnimation('jump');
+            } else {
+                this.playAnimation('idle');
+            }
         }
 
         this.position.lerp(this.targetPosition, deltaTime * 12);
