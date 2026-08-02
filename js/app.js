@@ -1,6 +1,6 @@
 /**
  * KA SURVIVAL - MODULAR GAME ENGINE & ARCHITECTURE
- * Includes Login System, Character Name Tag Rendering, and 2-Player Co-op
+ * Features: Login System, 5s Heartbeat Auto-Pairing, Copy Invite Link & 2-Player Co-op
  * Engine: Three.js
  */
 
@@ -721,7 +721,7 @@ class Environment {
 KASurvival.Environment = Environment;
 
 // ===================================================
-// 11. NETWORK MANAGER (PeerJS + Player Name Broadcast)
+// 11. NETWORK MANAGER (5s Heartbeat Auto-Pairing Relay)
 // ===================================================
 class NetworkManager {
     constructor(playerData) {
@@ -730,7 +730,8 @@ class NetworkManager {
         this.connection = null;
         this.isHost = false;
         this.isConnected = false;
-        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_signal_2026_room';
+        this.signalTopicUrl = 'https://ntfy.sh/ka_survival_room_signal_2026_v2';
+        this.heartbeatTimer = null;
 
         this.initPeer();
     }
@@ -755,6 +756,7 @@ class NetworkManager {
     }
 
     registerAndAutoPair() {
+        // 1. Check URL Hash first (#room=...)
         const hash = window.location.hash;
         if (hash.includes('#room=')) {
             const targetPeerId = hash.split('#room=')[1];
@@ -763,16 +765,50 @@ class NetworkManager {
                 return;
             }
         }
-        this.publishMyPeerId();
+
+        // 2. Update URL Hash with my ID for easy sharing
+        window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
+
+        // 3. Poll active host signal from ntfy.sh
+        this.fetchActiveHostAndConnect();
+
+        // 4. Start 4-second heartbeat signaling
+        this.startHeartbeatSignal();
+
+        // 5. Listen to SSE live stream for incoming friends
         this.listenForPeerSignal();
     }
 
-    publishMyPeerId() {
-        fetch(this.signalTopicUrl, {
-            method: 'POST',
-            body: this.playerData.playerUniqueId
-        }).catch(() => {});
-        window.history.replaceState(null, null, `#room=${this.playerData.playerUniqueId}`);
+    fetchActiveHostAndConnect() {
+        fetch(`${this.signalTopicUrl}/json?poll=1`)
+            .then(res => res.text())
+            .then(text => {
+                if (this.isConnected) return;
+                const lines = text.trim().split('\n');
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    try {
+                        const data = JSON.parse(lines[i]);
+                        const activeId = data.message ? data.message.trim() : '';
+                        if (activeId && activeId !== this.playerData.playerUniqueId) {
+                            this.connectToPeer(activeId);
+                            break;
+                        }
+                    } catch (e) {}
+                }
+            }).catch(() => {});
+    }
+
+    startHeartbeatSignal() {
+        const sendSignal = () => {
+            if (this.isConnected) return;
+            fetch(this.signalTopicUrl, {
+                method: 'POST',
+                body: this.playerData.playerUniqueId
+            }).catch(() => {});
+        };
+
+        sendSignal();
+        this.heartbeatTimer = setInterval(sendSignal, 4000);
     }
 
     listenForPeerSignal() {
@@ -896,24 +932,62 @@ class HUD {
         this.stateEl = document.getElementById('player-state');
         this.speedEl = document.getElementById('player-speed');
         this.posEl = document.getElementById('player-pos');
+        this.btnCopyInvite = document.getElementById('btn-copy-invite');
 
         this.setupEventBus();
+        this.setupCopyInviteButton();
     }
 
     setupEventBus() {
         KASurvival.globalEventBus.on('FRIEND_CONNECTED', (data) => {
             const badge = document.getElementById('friend-status-badge');
-            if (badge) {
-                badge.style.display = 'flex';
-                badge.innerHTML = `<span class="friend-dot online"></span> <span>Friend Connected (${data.isHost ? 'Client' : 'Host'})</span>`;
+            const statusText = document.getElementById('friend-status-text');
+            if (badge) badge.style.display = 'flex';
+            if (statusText) {
+                statusText.innerHTML = `<b style="color:#10b981;">Friend Connected (${data.isHost ? 'Client' : 'Host'})</b>`;
             }
         });
         KASurvival.globalEventBus.on('FRIEND_DISCONNECTED', () => {
-            const badge = document.getElementById('friend-status-badge');
-            if (badge) {
-                badge.innerHTML = `<span class="friend-dot"></span> <span>Friend Disconnected</span>`;
+            const statusText = document.getElementById('friend-status-text');
+            if (statusText) {
+                statusText.textContent = 'Friend Disconnected';
             }
         });
+    }
+
+    setupCopyInviteButton() {
+        if (!this.btnCopyInvite) return;
+        this.btnCopyInvite.addEventListener('click', () => {
+            const currentUrl = window.location.href;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(currentUrl).then(() => {
+                    this.showCopyFeedback();
+                }).catch(() => {
+                    this.fallbackCopyText(currentUrl);
+                });
+            } else {
+                this.fallbackCopyText(currentUrl);
+            }
+        });
+    }
+
+    fallbackCopyText(text) {
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        this.showCopyFeedback();
+    }
+
+    showCopyFeedback() {
+        if (!this.btnCopyInvite) return;
+        const originalText = this.btnCopyInvite.innerHTML;
+        this.btnCopyInvite.innerHTML = '<span>✅ Link Copied! Send to Friend</span>';
+        setTimeout(() => {
+            this.btnCopyInvite.innerHTML = originalText;
+        }, 2500);
     }
 
     update(player, playerData) {
