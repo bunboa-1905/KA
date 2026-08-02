@@ -483,9 +483,8 @@ class Player {
 
             const sinYaw = Math.sin(cameraYaw);
             const cosYaw = Math.cos(cameraYaw);
-
-            const worldMoveX = normX * cosYaw - normZ * sinYaw;
-            const worldMoveZ = normX * sinYaw + normZ * cosYaw;
+            const worldMoveX = normX * cosYaw + normZ * sinYaw;
+            const worldMoveZ = -normX * sinYaw + normZ * cosYaw;
 
             const baseSpeed = this.isRunning ? this.runSpeed : this.walkSpeed;
             this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, baseSpeed, deltaTime * 10);
