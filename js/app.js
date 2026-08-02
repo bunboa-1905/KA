@@ -724,6 +724,7 @@ class NetworkManager {
         this.roomName = '8899';
         this.topic = 'ka_survival_v2/room_8899';
         this.isConnected = false;
+        this.knownFriends = new Set();
 
         this.connectWebSocket();
     }
@@ -765,6 +766,21 @@ class NetworkManager {
             try {
                 const data = JSON.parse(message.toString());
                 if (data && data.senderId !== this.playerData.playerUniqueId) {
+                    
+                    // 2-Way Handshake: If we haven't seen this friend yet, reply immediately so they see us!
+                    if (!this.knownFriends.has(data.senderId)) {
+                        this.knownFriends.add(data.senderId);
+                        
+                        let px = 0, py = 0, pz = 0, rot = 0;
+                        if (window.game && window.game.player) {
+                            px = window.game.player.position.x;
+                            py = window.game.player.position.y;
+                            pz = window.game.player.position.z;
+                            rot = window.game.player.rotation;
+                        }
+                        this.broadcastPlayerState({ x: px, y: py, z: pz }, rot, false, false, this.playerData.playerName);
+                    }
+
                     KASurvival.globalEventBus.emit('LOBBY_FRIEND_JOINED', data.name);
                     KASurvival.globalEventBus.emit('FRIEND_CONNECTED', { isHost: false, friendName: data.name });
                     KASurvival.globalEventBus.emit('REMOTE_PLAYER_UPDATE', data);
