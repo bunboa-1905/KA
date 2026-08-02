@@ -197,7 +197,7 @@
             <div class="login-card glass-panel" style="max-width: 320px; padding: 25px;">
                 <h1 class="login-title" style="margin-bottom: 25px;">CÀI ĐẶT</h1>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
                     <span style="color: white; font-weight: 500;">Bật Controller (Điện thoại)</span>
                     <label style="position: relative; display: inline-block; width: 50px; height: 28px;">
                         <input type="checkbox" id="toggle-mobile-controls" style="opacity: 0; width: 0; height: 0;" onchange="document.getElementById('mobile-controls-wrapper').style.display = this.checked ? 'block' : 'none';">
@@ -207,6 +207,14 @@
                     </label>
                 </div>
 
+                <!-- NÚT PHÓNG TO TOÀN MÀN HÌNH -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <span style="color: white; font-weight: 500;">Phóng to toàn màn hình</span>
+                    <button class="login-btn secondary" onclick="toggleFullScreen();" style="width: auto; padding: 5px 15px; margin: 0; min-width: 60px;">
+                        <span>MỞ</span>
+                    </button>
+                </div>
+
                 <button class="login-btn secondary" onclick="document.getElementById('settings-modal').style.display='none';" style="margin-top: 0;">
                     <span>ĐÓNG</span>
                 </button>
@@ -214,6 +222,18 @@
         </div>
         
         <script>
+            // Hàm Bật/Tắt Toàn Màn Hình
+            function toggleFullScreen() {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    const docElm = document.documentElement;
+                    if (docElm.requestFullscreen) docElm.requestFullscreen();
+                    else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                }
+            }
+
             // CSS trực tiếp cho Toggle Switch để đỡ phải sửa file CSS
             const style = document.createElement('style');
             style.innerHTML = `
